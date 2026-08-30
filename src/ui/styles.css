@@ -1,0 +1,344 @@
+/* Inner Land Minesweeper — view layer styles.
+ *
+ * Theme is Tower "chrono": deep navy field, cyan energy, a warm→hot ramp for tougher
+ * ground. Tier is NEVER encoded by colour alone — every tier also carries a distinct
+ * border weight and a pip count (1–4), so the board reads without colour vision. All
+ * motion is gated behind prefers-reduced-motion.
+ */
+
+:root {
+  --bg: #0a0e17;
+  --bg-panel: #111827;
+  --grid-gap: 3px;
+  --tile: #1b2436;
+  --tile-raised: #223049;
+  --tile-edge: #2f3f5e;
+  --ink: #dbe4f5;
+  --ink-dim: #7c8aa5;
+  --energy: #35e0ff;
+  --energy-dim: #1a7f93;
+  --danger: #ff5b6e;
+  --warn: #ffb454;
+
+  /* Tier ramp — colour is redundant with border weight + pip count. */
+  --tier-light: #5b6b86;
+  --tier-medium: #2fa7a0;
+  --tier-heavy: #e0912f;
+  --tier-elite: #d8476b;
+
+  /* Classic-style number colours. */
+  --n1: #4aa3ff;
+  --n2: #46c56a;
+  --n3: #ff6b6b;
+  --n4: #b184ff;
+  --n5: #ffb454;
+  --n6: #35e0ff;
+  --n7: #dbe4f5;
+  --n8: #7c8aa5;
+
+  --tile-size: 40px;
+  --radius: 7px;
+}
+
+* { box-sizing: border-box; }
+
+.ilm-root {
+  --shake-x: 0px;
+  --shake-y: 0px;
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  background: radial-gradient(120% 120% at 50% 0%, #131c2e 0%, var(--bg) 70%);
+  border: 1px solid var(--tile-edge);
+  border-radius: 16px;
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---- HUD ------------------------------------------------------------- */
+
+.ilm-hud {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ilm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 92px;
+}
+.ilm-stat__label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.ilm-stat__value {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+.ilm-stat--charge .ilm-stat__value { color: var(--energy); }
+.ilm-stat--time.is-low .ilm-stat__value { color: var(--danger); }
+
+.ilm-chargebar {
+  height: 6px;
+  border-radius: 3px;
+  background: #0c1220;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.ilm-chargebar__fill {
+  height: 100%;
+  width: var(--charge-pct, 0%);
+  background: linear-gradient(90deg, var(--energy-dim), var(--energy));
+  transition: width 180ms ease;
+}
+.reduce-motion .ilm-chargebar__fill { transition: none; }
+
+.ilm-spacer { flex: 1; }
+
+.ilm-btn {
+  appearance: none;
+  border: 1px solid var(--tile-edge);
+  background: var(--tile-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.ilm-btn:hover { border-color: var(--energy-dim); }
+.ilm-btn:focus-visible { outline: 2px solid var(--energy); outline-offset: 2px; }
+.ilm-btn.is-active {
+  border-color: var(--energy);
+  background: #14313b;
+  color: var(--energy);
+}
+.ilm-select {
+  appearance: none;
+  border: 1px solid var(--tile-edge);
+  background: var(--tile-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+/* ---- Board ----------------------------------------------------------- */
+
+.ilm-stage {
+  position: relative;
+  transform: translate(var(--shake-x), var(--shake-y));
+}
+
+.ilm-board {
+  display: grid;
+  gap: var(--grid-gap);
+  grid-template-columns: repeat(var(--cols), var(--tile-size));
+  grid-auto-rows: var(--tile-size);
+}
+
+.ilm-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ---- Tiles ----------------------------------------------------------- */
+
+.ilm-tile {
+  position: relative;
+  border-radius: var(--radius);
+  background: var(--tile-raised);
+  border: 1px solid var(--tile-edge);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  color: var(--ink);
+  transition: transform 90ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+.reduce-motion .ilm-tile { transition: none; }
+.ilm-tile:focus-visible { outline: 2px solid var(--energy); outline-offset: 2px; z-index: 6; }
+.ilm-tile:hover:not(.is-cleared):not(.is-destroyed) { transform: translateY(-1px); }
+
+/* Covered tiles carry the tier as a coloured top edge (thickness = tier) plus corner pips. */
+.ilm-tile.is-covered,
+.ilm-tile.is-cracked {
+  background: linear-gradient(180deg, var(--tile-raised), var(--tile));
+}
+.ilm-tile[data-tier='light']  { border-top: 3px solid var(--tier-light); }
+.ilm-tile[data-tier='medium'] { border-top: 5px solid var(--tier-medium); }
+.ilm-tile[data-tier='heavy']  { border-top: 7px solid var(--tier-heavy); }
+.ilm-tile[data-tier='elite']  { border-top: 9px solid var(--tier-elite); }
+
+/* Redundant, non-colour tier cue: 1–4 pips bottom-right. */
+.ilm-pips {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  display: flex;
+  gap: 2px;
+}
+.ilm-tile.is-cleared .ilm-pips,
+.ilm-tile.is-destroyed .ilm-pips,
+.ilm-tile.is-armed .ilm-pips { display: none; }
+.ilm-pip {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+.ilm-tile[data-tier='light']  .ilm-pips { color: var(--tier-light); }
+.ilm-tile[data-tier='medium'] .ilm-pips { color: var(--tier-medium); }
+.ilm-tile[data-tier='heavy']  .ilm-pips { color: var(--tier-heavy); }
+.ilm-tile[data-tier='elite']  .ilm-pips { color: var(--tier-elite); }
+
+/* Cleared ground: recessed, shows a number. */
+.ilm-tile.is-cleared {
+  background: #0c1220;
+  border-color: #0c1220;
+  border-top-color: #0c1220;
+  cursor: default;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.ilm-tile.is-cleared[data-n='0'] { color: transparent; }
+.ilm-tile.is-cleared[data-n='1'] { color: var(--n1); }
+.ilm-tile.is-cleared[data-n='2'] { color: var(--n2); }
+.ilm-tile.is-cleared[data-n='3'] { color: var(--n3); }
+.ilm-tile.is-cleared[data-n='4'] { color: var(--n4); }
+.ilm-tile.is-cleared[data-n='5'] { color: var(--n5); }
+.ilm-tile.is-cleared[data-n='6'] { color: var(--n6); }
+.ilm-tile.is-cleared[data-n='7'] { color: var(--n7); }
+.ilm-tile.is-cleared[data-n='8'] { color: var(--n8); }
+
+/* Vaporised by a blast: an empty crater, no number. */
+.ilm-tile.is-destroyed {
+  background: #070b12;
+  border-color: #070b12;
+  border-top-color: #070b12;
+  cursor: default;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+/* Armed mine: a live chrono orb with a charge ring (conic-gradient by --charge). */
+.ilm-tile.is-armed {
+  background: radial-gradient(circle at 50% 45%, #16323d, #0b1622);
+  border-color: var(--energy-dim);
+  cursor: pointer;
+}
+.ilm-orb {
+  position: relative;
+  width: 66%;
+  height: 66%;
+  border-radius: 50%;
+  background:
+    conic-gradient(var(--energy) calc(var(--charge, 0) * 1turn), rgba(53, 224, 255, 0.12) 0);
+  display: grid;
+  place-items: center;
+  animation: ilm-pulse 1.8s ease-in-out infinite;
+}
+.reduce-motion .ilm-orb { animation: none; }
+.ilm-orb::after {
+  content: '';
+  width: 58%;
+  height: 58%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #eaffff, var(--energy) 60%, #0b1622 100%);
+  box-shadow: 0 0 10px var(--energy);
+}
+.ilm-orb__mult {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 800;
+  color: #041016;
+  z-index: 1;
+}
+
+@keyframes ilm-pulse {
+  0%, 100% { box-shadow: 0 0 6px var(--energy-dim); }
+  50% { box-shadow: 0 0 16px var(--energy); }
+}
+
+/* Cracked: covered tile with a fracture overlay; severity via --crack. */
+.ilm-tile.is-cracked::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(45deg, transparent 46%, rgba(255, 91, 110, calc(0.25 + var(--crack, 0) * 0.5)) 47%, transparent 49%),
+    linear-gradient(-20deg, transparent 60%, rgba(255, 91, 110, calc(0.15 + var(--crack, 0) * 0.5)) 61%, transparent 64%);
+  pointer-events: none;
+}
+
+/* Just-revealed flip, gated for reduced motion. */
+@keyframes ilm-flip {
+  from { transform: rotateX(80deg); opacity: 0.3; }
+  to { transform: rotateX(0); opacity: 1; }
+}
+.ilm-tile.just-cleared:not(.reduce-motion *) { animation: ilm-flip 160ms ease; }
+
+/* ---- Status banner --------------------------------------------------- */
+
+.ilm-banner {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  z-index: 10;
+  border-radius: 12px;
+  background: rgba(5, 8, 14, 0.72);
+  backdrop-filter: blur(2px);
+}
+.ilm-banner.is-shown { display: grid; }
+.ilm-banner__card {
+  text-align: center;
+  padding: 22px 30px;
+  border: 1px solid var(--tile-edge);
+  border-radius: 14px;
+  background: var(--bg-panel);
+}
+.ilm-banner__title { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+.ilm-banner.win .ilm-banner__title { color: var(--energy); }
+.ilm-banner.lose .ilm-banner__title { color: var(--danger); }
+.ilm-banner__detail { color: var(--ink-dim); font-size: 13px; margin-bottom: 14px; }
+
+.ilm-paused {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  z-index: 9;
+  border-radius: 12px;
+  background: rgba(5, 8, 14, 0.6);
+  color: var(--ink-dim);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ilm-paused.is-shown { display: grid; }
+
+/* Confirm hint for a catastrophic click. */
+.ilm-tile.confirm-armed {
+  outline: 2px dashed var(--warn);
+  outline-offset: 1px;
+}
