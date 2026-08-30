@@ -1,0 +1,29 @@
+{
+  "name": "@tmrxjd/inner-land-minesweeper",
+  "version": "0.0.0",
+  "description": "Inner Land Minesweeper — a Tower-themed sweep-the-mines puzzle. Framework-free engine, consumed as source.",
+  "license": "GPL-3.0-or-later",
+  "private": false,
+  "type": "module",
+  "main": "src/engine/index.ts",
+  "types": "src/engine/index.ts",
+  "exports": {
+    ".": "./src/engine/index.ts",
+    "./engine": "./src/engine/index.ts"
+  },
+  "files": [
+    "src",
+    "docs"
+  ],
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "harness": "tsx src/harness/run.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
