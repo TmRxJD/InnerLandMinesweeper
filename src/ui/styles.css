@@ -20,10 +20,15 @@
   --danger: #ff5b6e;
   --warn: #ffb454;
 
-  /* Tier ramp — colour is redundant with border weight + pip count. */
-  --tier-light: #5b6b86;
-  --tier-medium: #2fa7a0;
-  --tier-heavy: #e0912f;
+  /* One colour per enemy class: grey / yellow / blue / red, boss its own magenta. Enemy
+     sprites are recoloured to these so class reads at a glance regardless of which enemy
+     of that class it is. */
+  --enemy-common: #9aa6b8;
+  --enemy-advanced: #ffd23f;
+  --enemy-elite: #4aa3ff;
+  --enemy-fleet: #ff5b6e;
+  --enemy-boss: #d661ff;
+  /* Kept for the boss tile chrome / help crack icon. */
   --tier-elite: #d8476b;
 
   /* Classic-style number colours. */
@@ -268,6 +273,8 @@
 }
 .ilm-help__icon--ground { color: var(--n3); }
 .ilm-help__sprite { width: 24px; height: 24px; object-fit: contain; }
+.ilm-help__swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 30px; }
+.ilm-help__swatches i { width: 100%; aspect-ratio: 1; border-radius: 3px; display: block; }
 .ilm-help__icon--crack { color: var(--danger); background-image: linear-gradient(45deg, transparent 44%, rgba(255,91,110,0.6) 46%, transparent 50%); }
 .ilm-help__icon--flag { color: var(--energy); }
 .ilm-help__keys { margin: 16px 0 18px; font-size: 12px; color: var(--ink-dim); }
@@ -337,18 +344,32 @@
 .ilm-tile.is-cracked {
   background: linear-gradient(180deg, var(--tile-raised), var(--tile));
 }
-/* Sized off the exact (square) tile size so the sprite box is always square and fills the
-   tile — percentage sizing against the grid cell resolved non-square. */
+/* The enemy sprite is used as a MASK and filled with the class colour, so every enemy of a
+   class reads as one colour (grey/yellow/blue/red) while keeping its distinct shape. Sized
+   off the exact (square) tile size and centred by the mask, fixing off-centre sprites. */
 .ilm-enemy {
   width: calc(var(--tile-size) - 5px);
   height: calc(var(--tile-size) - 5px);
-  object-fit: contain;
+  -webkit-mask-image: var(--sprite);
+  mask-image: var(--sprite);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  background: var(--enemy-color, var(--enemy-common));
   pointer-events: none;
-  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.5));
 }
+.ilm-tile[data-tier='common'] .ilm-enemy { --enemy-color: var(--enemy-common); }
+.ilm-tile[data-tier='advanced'] .ilm-enemy { --enemy-color: var(--enemy-advanced); }
+.ilm-tile[data-tier='elite'] .ilm-enemy { --enemy-color: var(--enemy-elite); }
+.ilm-tile[data-tier='fleet'] .ilm-enemy { --enemy-color: var(--enemy-fleet); }
 .ilm-tile[data-tier='boss'] .ilm-enemy {
+  --enemy-color: var(--enemy-boss);
   width: calc(var(--tile-size) - 1px);
   height: calc(var(--tile-size) - 1px);
+  filter: drop-shadow(0 0 4px var(--enemy-boss));
 }
 /* The boss is bigger and menacing. */
 .ilm-tile[data-tier='boss'] {
@@ -356,14 +377,11 @@
   border-color: var(--tier-elite);
   z-index: 2;
 }
-.ilm-tile[data-tier='boss'] .ilm-enemy {
-  filter: drop-shadow(0 0 6px var(--danger));
-  animation: ilm-boss 2.4s ease-in-out infinite;
-}
+.ilm-tile[data-tier='boss'] .ilm-enemy { animation: ilm-boss 2.4s ease-in-out infinite; }
 .reduce-motion .ilm-tile[data-tier='boss'] .ilm-enemy { animation: none; }
 @keyframes ilm-boss {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px var(--danger)); }
-  50% { transform: scale(1.06); filter: drop-shadow(0 0 12px var(--danger)); }
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px var(--enemy-boss)); }
+  50% { transform: scale(1.06); filter: drop-shadow(0 0 12px var(--enemy-boss)); }
 }
 
 /* Cleared ground: recessed, shows a number. */
@@ -400,42 +418,35 @@
   border-color: var(--charge-color, var(--energy-dim));
   cursor: pointer;
 }
-/* Square charge meter: a rounded-square conic ring (not a circle/oval) matching the tile,
-   filling clockwise with --charge in the current --charge-color. Positioned by inset so it
-   is always exactly square (the tile is square), never oval. */
+/* Armed mine: just the Inner Land Mine sprite, filling the tile, with a glow + border that
+   ramp colour with charge. No ring meter — the ×N badge is the exact charge readout. */
 .ilm-orb {
   position: absolute;
   inset: 2px;
-  border-radius: calc(var(--radius) - 1px);
-  background:
-    conic-gradient(var(--charge-color, var(--energy)) calc(var(--charge, 0) * 1turn),
-      rgba(255, 255, 255, 0.12) 0);
   display: grid;
   place-items: center;
-  padding: 3px;
-  animation: ilm-pulse 1.8s ease-in-out infinite;
   --pulse-color: var(--charge-color, var(--energy));
+  animation: ilm-pulse 1.8s ease-in-out infinite;
 }
 .reduce-motion .ilm-orb { animation: none; }
 .ilm-mine-img {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  border-radius: calc(var(--radius) - 3px);
-  background: #0b1622;
-  filter: drop-shadow(0 0 4px var(--charge-color, var(--energy)));
+  filter: drop-shadow(0 0 5px var(--charge-color, var(--energy)));
   pointer-events: none;
 }
 .ilm-orb__mult {
   position: absolute;
-  right: -2px;
-  bottom: -2px;
+  right: -1px;
+  bottom: -1px;
   font-size: 9px;
   font-weight: 800;
   color: #041016;
   background: var(--charge-color, var(--energy));
-  border-radius: 6px;
+  border-radius: 5px;
   padding: 0 3px;
+  line-height: 1.35;
   z-index: 2;
 }
 
@@ -467,6 +478,29 @@
 }
 .ilm-tile.charge-up .ilm-orb { animation: ilm-charge-up 420ms ease-out; }
 .reduce-motion .ilm-tile.charge-up .ilm-orb { animation: none; }
+
+/* Enemy health bar — shown once an enemy is damaged (cracked), so you can see how much
+   fight is left in it, the boss especially. Remaining health = 1 - crack; colour shifts
+   green→red as it drops. */
+.ilm-hp {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 2px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  z-index: 3;
+}
+.ilm-hp::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: calc(var(--hp, 1) * 100%);
+  background: color-mix(in srgb, var(--danger), var(--n2) calc(var(--hp, 1) * 100%));
+}
+.ilm-tile[data-tier='boss'] .ilm-hp { height: 4px; }
 
 /* Cracked: covered tile with a fracture overlay; severity via --crack. */
 .ilm-tile.is-cracked::before {

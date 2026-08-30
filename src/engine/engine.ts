@@ -310,10 +310,11 @@ class Engine implements MinesweeperEngine {
     for (const other of this.board.tiles) {
       if (other === source) continue
       if (other.state !== 'armed') continue
+      if (other.mineCharge >= this.cfg.maxMineCharge) continue // already at the cap
       const covers = withinRadius(this.board, other.x, other.y, this.cfg.blastRadius)
       if (covers.some(c => clearedSet.has(c))) {
         const from = other.mineCharge
-        other.mineCharge += this.cfg.chargeGainPerOverlap
+        other.mineCharge = Math.min(this.cfg.maxMineCharge, other.mineCharge + this.cfg.chargeGainPerOverlap)
         events.push({ kind: 'mineChargeChanged', coord: { x: other.x, y: other.y }, from, to: other.mineCharge })
       }
     }

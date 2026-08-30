@@ -166,8 +166,10 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
 
       let tier: Tier = rng.weighted(cfg.tierWeights)
       const h = hardness(x, y)
+      // Occasionally bump a tile up the ramp inside a hard-ground cluster — mostly by a
+      // single step, so tough enemies stay rarer than commons rather than flooding.
       if (rng.chance(cfg.hardGroundGradient * h)) {
-        tier = upgradeTier(tier, rng.chance(0.4) ? 2 : 1)
+        tier = upgradeTier(tier, rng.chance(0.2) ? 2 : 1)
       }
 
       const band = cfg.bands[tier]

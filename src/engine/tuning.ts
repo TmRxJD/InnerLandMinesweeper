@@ -36,6 +36,8 @@ export interface DifficultyConfig {
   readonly blastRadius: number
   /** Charge a mine gains per overlapping blast. */
   readonly chargeGainPerOverlap: number
+  /** Hard ceiling on a mine's charge multiplier — bounds late-game blast damage. */
+  readonly maxMineCharge: number
   /** Fraction of a detonated mine's charge that converts into the player pool. */
   readonly chargeConversion: number
   /** Base seconds lost on the first chip (over-HP click). */
@@ -72,8 +74,9 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 9,
     height: 9,
     mineDensity: 0.22,
-    tierWeights: { common: 6, advanced: 3, elite: 1.5, fleet: 0.5, boss: 0 },
-    hardGroundGradient: 0.4,
+    tierWeights: { common: 13, advanced: 4, elite: 1.6, fleet: 0.5, boss: 0 },
+    hardGroundGradient: 0.16,
+    maxMineCharge: 6,
     bands: SHARED_BANDS,
     timerSeconds: 300,
     startingCharge: 12,
@@ -91,8 +94,9 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 11,
     height: 11,
     mineDensity: 0.24,
-    tierWeights: { common: 5, advanced: 3.5, elite: 2, fleet: 1, boss: 0 },
-    hardGroundGradient: 0.55,
+    tierWeights: { common: 11, advanced: 4.5, elite: 2.2, fleet: 0.9, boss: 0 },
+    hardGroundGradient: 0.2,
+    maxMineCharge: 6,
     bands: SHARED_BANDS,
     timerSeconds: 420,
     startingCharge: 12,
@@ -110,8 +114,9 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 15,
     height: 15,
     mineDensity: 0.26,
-    tierWeights: { common: 4, advanced: 3.5, elite: 2.5, fleet: 1.5, boss: 0 },
-    hardGroundGradient: 0.7,
+    tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
+    hardGroundGradient: 0.26,
+    maxMineCharge: 7,
     bands: SHARED_BANDS,
     timerSeconds: 600,
     startingCharge: 14,

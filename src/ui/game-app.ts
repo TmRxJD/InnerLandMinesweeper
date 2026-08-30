@@ -223,11 +223,16 @@ export class GameApp {
               board and refills your charge. Its ring brightens and shifts colour as its charge grows.</div>
           </div>
           <div class="ilm-help__row">
-            <span class="ilm-help__icon"><img src="${enemyVampire}" alt="" class="ilm-help__sprite"></span>
-            <div><b>Enemies show toughness.</b> Common → Advanced → Elite → Fleet is how much charge a
-              tile costs to clear; the exact cost is hidden inside the class — that's the risk. Each
-              tile is a real Tower enemy: Common (Basic/Fast/Tank), Advanced (Ranged/Protector),
-              Elite (Vampire/Ray/Scatter), Fleet (Saboteur/Commander/Overcharge).</div>
+            <span class="ilm-help__swatches" aria-hidden="true">
+              <i style="background:var(--enemy-common)"></i><i style="background:var(--enemy-advanced)"></i><i style="background:var(--enemy-elite)"></i><i style="background:var(--enemy-fleet)"></i>
+            </span>
+            <div><b>Enemies show toughness by colour.</b>
+              <b style="color:var(--enemy-common)">Common (grey)</b> →
+              <b style="color:var(--enemy-advanced)">Advanced (yellow)</b> →
+              <b style="color:var(--enemy-elite)">Elite (blue)</b> →
+              <b style="color:var(--enemy-fleet)">Fleet (red)</b> is how much charge a tile costs to
+              clear; the exact cost is hidden inside the class — that's the risk. Damaged enemies show
+              a health bar.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
@@ -534,10 +539,17 @@ export class GameApp {
         `<span class="ilm-orb__mult">${charge}×</span></span>`
       label = `armed Inner Land Mine, charge ${charge} times`
     } else {
-      // covered or cracked — show the real enemy sprite; crack overlay scales with severity.
-      if (t.crack !== undefined) el.style.setProperty('--crack', String(t.crack))
-      el.innerHTML = `<img class="ilm-enemy" src="${spriteFor(t.tier, t.coord.x, t.coord.y)}" alt="" draggable="false">`
-      label = t.state === 'cracked' ? `${cls} enemy, cracked` : `${cls} enemy`
+      // covered or cracked — the enemy sprite is a mask filled with the class colour.
+      const sprite = `<span class="ilm-enemy" style="--sprite:url(${spriteFor(t.tier, t.coord.x, t.coord.y)})"></span>`
+      if (t.state === 'cracked' && t.crack !== undefined) {
+        el.style.setProperty('--crack', String(t.crack))
+        const hp = Math.max(0, 1 - t.crack)
+        el.innerHTML = `${sprite}<span class="ilm-hp" style="--hp:${hp}"></span>`
+        label = `${cls} enemy, ${Math.round(hp * 100)}% health`
+      } else {
+        el.innerHTML = sprite
+        label = `${cls} enemy`
+      }
     }
     el.setAttribute('aria-label', label)
     // Preserve roving tabindex.
