@@ -41,20 +41,16 @@ describe('opening guarantee', () => {
     expect(o.adjacent).toBe(0)
   })
 
-  it('revealing the opening fires a free cascade', () => {
+  it('revealing the opening clears exactly one tile (no flood-fill)', () => {
     const seed = 'open-seed'
     const board = truth(seed)
     const engine = createEngine({ difficulty: DIFF, seed, now: () => 0 })
     const before = engine.snapshot().playerCharge
     const events = engine.reveal(board.opening)
     const cleared = events.filter(e => e.kind === 'tileCleared')
-    expect(cleared.length).toBeGreaterThan(1) // opening + at least one cascade tile
-    // The opening click pays its own (trivial, Common) HP; every cascade tile is free.
-    const cascadeTiles = cleared.filter(e => e.kind === 'tileCleared' && e.cascadeDistance > 0)
-    expect(cascadeTiles.length).toBeGreaterThan(0)
-    expect(cascadeTiles.every(e => e.kind === 'tileCleared' && e.chargeSpent === 0)).toBe(true)
+    expect(cleared).toHaveLength(1) // only the clicked tile — one tile per click
     const openingHp = tileAt(board, board.opening.x, board.opening.y)!.maxHp
-    expect(engine.snapshot().playerCharge).toBe(before - openingHp) // only the origin cost charge
+    expect(engine.snapshot().playerCharge).toBe(before - openingHp)
   })
 })
 

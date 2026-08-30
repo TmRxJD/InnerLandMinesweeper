@@ -109,9 +109,8 @@ class Engine implements MinesweeperEngine {
       radius: radiusTiles.map(t => ({ x: t.x, y: t.y })),
     })
 
-    // 3. Removing the mine decrements neighbours' live counts; any cleared number that
-    //    hits zero unzips a free Common cascade.
-    chainCleared += this.decrementAround(tile, events)
+    // 3. Removing the mine decrements neighbours' live counts so numbers stay accurate.
+    this.decrementAround(tile, events)
 
     // 4. Apply blast damage. Track which ground cells this blast *cleared* — overlap
     //    charging keys off cleared ground, not merely damaged ground.
@@ -172,12 +171,10 @@ class Engine implements MinesweeperEngine {
 
   private clickGround(tile: Tile, events: GameEvent[]): void {
     if (this.playerCharge >= tile.hp) {
-      // Clean clear: pay the tile's full (hidden) HP.
+      // Clean clear: pay the tile's full (hidden) HP. One tile per click — no flood-fill.
       const cost = tile.hp
       this.setPlayerCharge(this.playerCharge - cost, events)
       this.clearGroundTile(tile, cost, events)
-      const cascaded = this.cascadeFrom(tile, events)
-      if (cascaded > this.maxChain) this.maxChain = cascaded
       this.checkWin(events)
       return
     }
@@ -238,44 +235,6 @@ class Engine implements MinesweeperEngine {
     events.push({ kind: 'tileDestroyed', coord: { x: tile.x, y: tile.y } })
   }
 
-  // -- cascades ------------------------------------------------------------
-
-  /**
-   * Free, Common-only flood from a just-cleared zero-adjacent tile. Reveals covered Common
-   * ground neighbours; continues only through Common tiles that are themselves zero.
-   * Returns the number of tiles cleared by the cascade.
-   */
-  private cascadeFrom(origin: Tile, events: GameEvent[]): number {
-    if (origin.adjacent !== 0) return 0
-    let count = 0
-    const queue: Array<{ tile: Tile; dist: number }> = [{ tile: origin, dist: 0 }]
-    const seen = new Set<Tile>([origin])
-    while (queue.length > 0) {
-      const { tile, dist } = queue.shift()!
-      for (const n of neighbours(this.board, tile.x, tile.y)) {
-        if (seen.has(n)) continue
-        if (n.isMine) continue
-        if (n.tier !== 'common') continue
-        if (n.state === 'cleared') continue
-        seen.add(n)
-        n.state = 'cleared'
-        n.numberKnown = true
-        n.hp = 0
-        this.tilesCleared++
-        count++
-        events.push({
-          kind: 'tileCleared',
-          coord: { x: n.x, y: n.y },
-          number: n.adjacent,
-          cascadeDistance: dist + 1,
-          chargeSpent: 0,
-        })
-        if (n.adjacent === 0) queue.push({ tile: n, dist: dist + 1 })
-      }
-    }
-    return count
-  }
-
   // -- detonation helpers --------------------------------------------------
 
   private armMine(tile: Tile, via: 'click' | 'blast', events: GameEvent[]): void {
@@ -288,22 +247,19 @@ class Engine implements MinesweeperEngine {
     })
   }
 
-  /** Decrement every ground neighbour's live count; zero-hitting cleared tiles cascade. */
-  private decrementAround(mine: Tile, events: GameEvent[]): number {
-    let cleared = 0
+  /** Decrement every ground neighbour's live count so revealed numbers stay accurate as
+   *  the mine leaves the board. No flood-fill — a number reaching zero just shows zero. */
+  private decrementAround(mine: Tile, events: GameEvent[]): void {
     for (const n of neighbours(this.board, mine.x, mine.y)) {
       if (n.isMine) continue
       if (n.adjacent <= 0) continue
       const from = n.adjacent
       n.adjacent--
-      // Only a *known* number is visible, so only it can decrement on screen and only it
-      // can hit zero and unzip a cascade. A vaporised tile has no number to change.
+      // Only a *known* number is visible, so only it can decrement on screen.
       if (n.state === 'cleared' && n.numberKnown) {
         events.push({ kind: 'numberDecremented', coord: { x: n.x, y: n.y }, from, to: n.adjacent })
-        if (n.adjacent === 0) cleared += this.cascadeFrom(n, events)
       }
     }
-    return cleared
   }
 
   private chargeOverlappingMines(source: Tile, clearedGround: Tile[], events: GameEvent[]): void {
