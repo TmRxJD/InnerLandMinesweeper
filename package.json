@@ -21,7 +21,8 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "harness": "tsx src/harness/run.ts"
+    "harness": "tsx src/harness/run.ts",
+    "play": "tsx src/cli/play.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

@@ -4,11 +4,9 @@
  * FX layer (flourish). The engine is the single source of truth; this file never decides
  * game rules.
  *
- * Input: click a covered tile to reveal it; click a glowing orb (an armed mine) to detonate
- * it. Arming and detonating stay two distinct actions on two distinct visual states, so
- * "detonate is separate" holds without a mode toggle. Keyboard mirrors this with a roving
- * tabindex + Enter/Space. A catastrophic click (tough ground you visibly can't afford) asks
- * for a confirm.
+ * Input: tap a Common to clear it or a hidden mine to arm it; click a glowing armed mine to
+ * detonate it. Tapping a tough (shielded) tile just bumps — only blasts clear those.
+ * Keyboard mirrors taps with a roving tabindex + Enter/Space.
  */
 
 import { createEngine } from '../engine/engine'
@@ -42,7 +40,6 @@ const ENEMY_SETS: Record<Tier, readonly string[]> = {
   boss: [enemyBoss],
 }
 
-const TIER_MIN_COST: Record<Tier, number> = { common: 1, advanced: 2, elite: 4, fleet: 6, boss: 18 }
 const TIER_LABEL: Record<Tier, string> = {
   common: 'Common', advanced: 'Advanced', elite: 'Elite', fleet: 'Fleet', boss: 'Boss',
 }
@@ -92,8 +89,6 @@ export class GameApp {
 
   private width = 0
   private height = 0
-  private maxChargeSeen = 1
-  private confirmCoord: Coord | null = null
   private focusIndex = 0
 
   private rafId = 0
@@ -218,9 +213,9 @@ export class GameApp {
 
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--ground">3</span>
-            <div><b>Sweep ground.</b> Click a covered tile. If it's ground it clears and shows a
-              number — how many mines touch it, exactly like classic Minesweeper. Sweeping costs
-              <b>charge</b>.</div>
+            <div><b>Tap Commons.</b> Click a grey Common to clear it and reveal a number — how many
+              mines touch it, like classic Minesweeper. Tapping costs <b>charge</b> (capped, shown in
+              the HUD). Tougher enemies can't be tapped — see below.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${mineUrl}" alt="" class="ilm-help__sprite"></span>
@@ -232,23 +227,18 @@ export class GameApp {
             <span class="ilm-help__swatches" aria-hidden="true">
               <i style="background:var(--enemy-common)"></i><i style="background:var(--enemy-advanced)"></i><i style="background:var(--enemy-elite)"></i><i style="background:var(--enemy-fleet)"></i>
             </span>
-            <div><b>Enemies show toughness by colour.</b>
-              <b style="color:var(--enemy-common)">Common (grey)</b> →
-              <b style="color:var(--enemy-advanced)">Advanced (yellow)</b> →
-              <b style="color:var(--enemy-elite)">Elite (blue)</b> →
-              <b style="color:var(--enemy-fleet)">Fleet (red)</b> is how much charge a tile costs to
-              clear; the exact cost is hidden inside the class — that's the risk. Damaged enemies show
-              a health bar.</div>
+            <div><b>Enemies by colour.</b>
+              <b style="color:var(--enemy-common)">Common (grey)</b> is the only kind you can tap to
+              kill. <b style="color:var(--enemy-advanced)">Advanced (yellow)</b>,
+              <b style="color:var(--enemy-elite)">Elite (blue)</b> and
+              <b style="color:var(--enemy-fleet)">Fleet (red)</b> are <b>shielded</b> — tapping them
+              does nothing; only a <b>mine blast</b> reduces their HP. Their health bar shows the
+              damage.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
-            <div><b>The Boss</b> sits at the centre — far tougher than anything else. You'll chip it
-              down or blast it repeatedly to finish the board.</div>
-          </div>
-          <div class="ilm-help__row">
-            <span class="ilm-help__icon ilm-help__icon--crack"></span>
-            <div><b>Can't afford it?</b> The tile cracks instead of clearing, drains your charge, and
-              costs time. Detonate a mine to recharge rather than grinding.</div>
+            <div><b>The Boss</b> sits at the centre — far tougher than anything else, and the one
+              tough enemy you <em>can</em> tap. Grind it down over the end-game (blasts help too).</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--flag">✓</span>
@@ -313,8 +303,6 @@ export class GameApp {
     const snap = this.engine.snapshot()
     this.width = snap.width
     this.height = snap.height
-    this.maxChargeSeen = Math.max(1, snap.playerCharge)
-    this.confirmCoord = null
     this.focusIndex = 0
     this.buildGrid(snap)
     this.fitBoard()
@@ -375,23 +363,12 @@ export class GameApp {
     if (!tile) return
 
     if (tile.state === 'armed') {
-      this.confirmCoord = null
       this.apply(this.engine.detonate(coord))
       return
     }
     if (tile.state !== 'covered' && tile.state !== 'cracked') return
-
-    // Catastrophic-click confirm: tough ground the player visibly cannot afford.
-    const snap = this.engine.snapshot()
-    const unaffordable =
-      TIER_MIN_COST[tile.tier] > snap.playerCharge &&
-      (tile.tier === 'elite' || tile.tier === 'fleet' || tile.tier === 'boss')
-    if (unaffordable && !this.sameCoord(this.confirmCoord, coord)) {
-      this.setConfirm(coord)
-      return
-    }
-    this.confirmCoord = null
-    this.clearConfirmClass()
+    // Tapping a tough (non-Common, non-Boss) tile is shielded by the engine and just bumps;
+    // Commons and the Boss are worked by hand. No confirm needed.
     this.apply(this.engine.reveal(coord))
   }
 
@@ -426,17 +403,6 @@ export class GameApp {
     }
   }
 
-  private setConfirm(coord: Coord): void {
-    this.clearConfirmClass()
-    this.confirmCoord = coord
-    const el = this.tiles[this.indexOf(coord)]
-    el?.classList.add('confirm-armed')
-    el?.setAttribute('aria-label', `${this.tileView(coord)?.tier} tile — low charge, activate again to chip`)
-  }
-
-  private clearConfirmClass(): void {
-    for (const t of this.tiles) t.classList.remove('confirm-armed')
-  }
 
   // -- apply events + render --------------------------------------------
 
@@ -453,6 +419,10 @@ export class GameApp {
           // A mine's charge went up: spark it and flash it in its new charge colour.
           this.fx.chargeSpark(e.coord.x, e.coord.y)
           this.flashChargeUp(e.coord, e.to)
+          break
+        case 'tileShielded':
+          // Tapped a tough tile that can't be cleared by hand — nudge it red.
+          this.pulseTile(e.coord, 'shielded-bump')
           break
         case 'gameWon':
         case 'gameLost':
@@ -481,12 +451,12 @@ export class GameApp {
   }
 
   private render(snap: BoardSnapshot): void {
-    this.maxChargeSeen = Math.max(this.maxChargeSeen, snap.playerCharge)
     for (let i = 0; i < snap.tiles.length; i++) {
       this.renderTile(this.tiles[i]!, snap.tiles[i]!)
     }
-    this.elCharge.textContent = String(snap.playerCharge)
-    const pct = Math.max(0, Math.min(100, (snap.playerCharge / this.maxChargeSeen) * 100))
+    const maxCharge = DIFFICULTIES[this.difficulty].maxPlayerCharge
+    this.elCharge.textContent = `${snap.playerCharge}/${maxCharge}`
+    const pct = Math.max(0, Math.min(100, (snap.playerCharge / maxCharge) * 100))
     this.elChargeFill.style.setProperty('--charge-pct', `${pct}%`)
     this.elTime.textContent = this.fmtTime(snap.timeRemaining)
     this.elTimeStat.classList.toggle('is-low', snap.timeRemaining <= 30)
@@ -503,18 +473,14 @@ export class GameApp {
     }
     const armed = snap.tiles.some(t => t.state === 'armed')
     const cleared = snap.tiles.some(t => t.state === 'cleared')
-    const covered = snap.tiles.filter(t => t.state === 'covered' || t.state === 'cracked')
-    const cheapestMin = covered.reduce((m, t) => Math.min(m, TIER_MIN_COST[t.tier]), Infinity)
 
     let msg: string
     if (!cleared && !armed) {
-      msg = 'Click any tile to sweep it — ground reveals a number, a mine arms as a glowing orb.'
-    } else if (armed && snap.playerCharge < cheapestMin) {
-      msg = 'Low charge — click a glowing orb to detonate it and recharge.'
+      msg = 'Tap grey Commons to clear them and reveal numbers. A mine arms as a glowing orb.'
     } else if (armed) {
-      msg = 'A glowing orb is an armed mine — click it to detonate a blast and gain charge.'
+      msg = 'Click a glowing mine to detonate it — the blast is the only way to clear tough enemies.'
     } else {
-      msg = 'Sweep ground to reveal numbers (adjacent mines). Numbers guide you to the mines.'
+      msg = 'Tap Commons to clear; tougher enemies (yellow/blue/red) need a mine blast to kill.'
     }
     this.elCoach.textContent = msg
   }
@@ -703,11 +669,7 @@ export class GameApp {
   }
   private coordOf(i: number): Coord {
     return { x: i % this.width, y: Math.floor(i / this.width) }
-  }
-  private sameCoord(a: Coord | null, b: Coord | null): boolean {
-    return !!a && !!b && a.x === b.x && a.y === b.y
-  }
-  private fmtTime(s: number): string {
+  }  private fmtTime(s: number): string {
     const sec = Math.max(0, Math.ceil(s))
     return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
   }

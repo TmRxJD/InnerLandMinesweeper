@@ -124,49 +124,40 @@ describe('clean clear costs the hidden HP', () => {
   })
 })
 
-describe('chip when unaffordable', () => {
-  it('drains charge, cracks, and costs time once the pool is spent', () => {
-    const seed = 'chip-drain'
+describe('tapping tiles', () => {
+  it('only Common (and Boss) tiles can be tapped; tougher tiles are shielded', () => {
+    const seed = 'shield-seed'
     const board = truth(seed)
-    // Click the toughest ground tiles (never mines, never the opening) in descending HP
-    // order; charge runs out and the next unaffordable click chips.
-    const tough = board.tiles
-      .filter(t => !t.isMine && !(t.x === board.opening.x && t.y === board.opening.y))
-      .sort((a, b) => b.maxHp - a.maxHp)
     const engine = createEngine({ difficulty: DIFF, seed, now: () => 0 })
-    let sawCrack = false
-    for (const t of tough) {
-      const timeBefore = engine.snapshot().timeRemaining
-      const events = engine.reveal({ x: t.x, y: t.y })
-      const cracked = events.find(e => e.kind === 'tileCracked')
-      if (cracked) {
-        sawCrack = true
-        expect(events.some(e => e.kind === 'timePenalty')).toBe(true)
-        expect(engine.snapshot().timeRemaining).toBeLessThan(timeBefore)
-        const view = engine.snapshot().tiles.find(v => v.coord.x === t.x && v.coord.y === t.y)!
-        expect(view.state).toBe('cracked')
-        break
-      }
-    }
-    expect(sawCrack).toBe(true)
+    // A tough (Advanced/Elite/Fleet) ground tile that isn't a mine or the opening.
+    const tough = board.tiles.find(
+      t => !t.isMine && (t.tier === 'advanced' || t.tier === 'elite' || t.tier === 'fleet'),
+    )
+    expect(tough).toBeDefined()
+    const before = engine.snapshot()
+    const events = engine.reveal({ x: tough!.x, y: tough!.y })
+    expect(events.some(e => e.kind === 'tileShielded')).toBe(true)
+    // No state change, no charge spent — a mine blast is the only thing that damages it.
+    const view = engine.snapshot().tiles.find(v => v.coord.x === tough!.x && v.coord.y === tough!.y)!
+    expect(view.state).toBe('covered')
+    expect(engine.snapshot().playerCharge).toBe(before.playerCharge)
   })
 
-  it('escalates the time penalty on repeated chips', () => {
-    const engine = createEngine({ difficulty: DIFF, seed: 'escalate', now: () => 0 })
-    // Force charge to 0 by finding any unaffordable tile is fiddly; instead chip the same
-    // idea via two broke clicks and compare penalties directly from events.
-    const board = truth('escalate')
-    const tough = board.tiles
-      .filter(t => !t.isMine && !(t.x === board.opening.x && t.y === board.opening.y))
-      .sort((a, b) => b.maxHp - a.maxHp)
-    const penalties: number[] = []
-    for (const t of tough) {
-      const ev = engine.reveal({ x: t.x, y: t.y })
-      for (const e of ev) if (e.kind === 'timePenalty') penalties.push(e.seconds)
-      if (penalties.length >= 2) break
-    }
-    expect(penalties.length).toBeGreaterThanOrEqual(2)
-    expect(penalties[1]!).toBeGreaterThan(penalties[0]!)
+  it('the Boss chips (partial damage, no time penalty) when tapped under-charged', () => {
+    // Boss is at centre with HP far above the charge pool, so a tap always chips it.
+    const seed = 'boss-chip'
+    const engine = createEngine({ difficulty: DIFF, seed, now: () => 0 })
+    const cx = Math.floor(cfg.width / 2)
+    const cy = Math.floor(cfg.height / 2)
+    const timeBefore = engine.snapshot().timeRemaining
+    const events = engine.reveal({ x: cx, y: cy })
+    expect(events.some(e => e.kind === 'tileCracked')).toBe(true)
+    expect(events.some(e => e.kind === 'timePenalty')).toBe(false) // penalty removed
+    expect(engine.snapshot().timeRemaining).toBe(timeBefore) // tapping costs no time
+    expect(engine.snapshot().playerCharge).toBe(0) // charge spent as damage
+    const view = engine.snapshot().tiles.find(v => v.coord.x === cx && v.coord.y === cy)!
+    expect(view.state).toBe('cracked')
+    expect(view.crack).toBeGreaterThan(0) // HP bar reflects the damage
   })
 })
 

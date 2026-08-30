@@ -1,9 +1,9 @@
 /**
  * The concrete engine. Pure: no DOM, no framework, no wall-clock unless you let it.
  *
- * Charge is a damage currency. A clean clear costs a ground tile's hidden HP; when you
- * can't pay it in full the click chips instead — partial damage, a drained pool, and an
- * escalating time penalty. Detonating an armed mine converts its charge into your pool.
+ * Charge is a damage currency. Tapping clears Commons (and grinds the Boss); tougher tiles
+ * are shielded and only a mine blast reduces their HP. Detonating an armed mine converts its
+ * charge into your (capped) pool.
  * Every mutating method returns the ordered events it produced. See docs/GAME_DESIGN.md.
  */
 
@@ -44,7 +44,6 @@ class Engine implements MinesweeperEngine {
   private moves = 0
   private detonations = 0
   private cracks = 0
-  private chipsSoFar = 0
   private maxChain = 0
   private tilesCleared = 0
   private readonly groundTotal: number
@@ -129,7 +128,7 @@ class Engine implements MinesweeperEngine {
         clearedByBlast.push(t)
         chainCleared += 1
       } else {
-        this.chipTile(t, damage, events, /*charge already spent*/ false)
+        this.damageTile(t, damage, events, /*chargeSpent*/ false)
       }
     }
 
@@ -170,6 +169,14 @@ class Engine implements MinesweeperEngine {
   // -- ground clicks -------------------------------------------------------
 
   private clickGround(tile: Tile, events: GameEvent[]): void {
+    // Only Common enemies and the Boss can be worked by hand. The Boss is the slow end-game
+    // grind; everything else tough (Advanced/Elite/Fleet) is shielded — only a mine blast
+    // reduces its HP.
+    if (tile.tier !== 'common' && tile.tier !== 'boss') {
+      events.push({ kind: 'tileShielded', coord: { x: tile.x, y: tile.y }, tier: tile.tier })
+      return
+    }
+
     if (this.playerCharge >= tile.hp) {
       // Clean clear: pay the tile's full (hidden) HP. One tile per click — no flood-fill.
       const cost = tile.hp
@@ -186,12 +193,14 @@ class Engine implements MinesweeperEngine {
       tile.hp -= damage
       this.setPlayerCharge(0, events)
     }
-    this.chipTile(tile, damage, events, /*chargeAlreadySpent*/ true)
+    this.damageTile(tile, damage, events, /*chargeSpent*/ true)
     this.checkWin(events)
   }
 
-  private chipTile(tile: Tile, damage: number, events: GameEvent[], chargeAlreadySpent: boolean): void {
-    tile.crackCount++
+  /** Tapped a tappable tile (Common or Boss) without enough charge to finish it: deal the
+   *  partial damage and leave it damaged. The HP bar shows the progress — no separate crack
+   *  overlay, no time penalty (removed: the health bar already conveys this). */
+  private damageTile(tile: Tile, damage: number, events: GameEvent[], chargeSpent: boolean): void {
     this.cracks++
     if (tile.state !== 'cracked') tile.state = 'cracked'
     const crack = Math.max(0, Math.min(1, 1 - tile.hp / tile.maxHp))
@@ -200,17 +209,8 @@ class Engine implements MinesweeperEngine {
       coord: { x: tile.x, y: tile.y },
       crack,
       hpKnockedDown: damage,
-      chargeDrained: chargeAlreadySpent ? damage : 0,
+      chargeDrained: chargeSpent ? damage : 0,
     })
-    // Linear, capped time penalty keyed on the running chip count across the whole game:
-    // one honest mistake is cheap, sustained blind-probing compounds toward the cap.
-    const penalty = Math.min(
-      this.cfg.crackPenaltyCap,
-      this.cfg.crackTimePenalty + this.cfg.crackPenaltyGrowth * this.chipsSoFar,
-    )
-    this.chipsSoFar++
-    events.push({ kind: 'timePenalty', seconds: penalty, reason: this.playerCharge === 0 && damage === 0 ? 'chipGrind' : 'crack' })
-    this.spendTime(penalty, events)
   }
 
   private clearGroundTile(tile: Tile, chargeSpent: number, events: GameEvent[]): void {
@@ -281,7 +281,7 @@ class Engine implements MinesweeperEngine {
 
   private setPlayerCharge(next: number, events: GameEvent[]): void {
     const from = this.playerCharge
-    const clamped = Math.max(0, next)
+    const clamped = Math.max(0, Math.min(this.cfg.maxPlayerCharge, next))
     if (clamped === from) return
     this.playerCharge = clamped
     events.push({ kind: 'playerChargeChanged', from, to: clamped })

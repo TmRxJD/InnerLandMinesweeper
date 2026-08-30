@@ -207,6 +207,31 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
   bossTile.hp = rng.int(bossBand.minHp, bossBand.maxHp)
   ;(bossTile as { maxHp: number }).maxHp = bossTile.hp
 
+  // Reachability: a blast-only tile (Advanced/Elite/Fleet) is unwinnable if no mine can ever
+  // reach it, so guarantee a mine sits within blast range of each — otherwise downgrade it to
+  // a tappable Common. (Boss is tap-grindable, so it needs no guarantee.)
+  const R = cfg.blastRadius
+  const mineWithinBlast = (x: number, y: number): boolean => {
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        if (dx === 0 && dy === 0) continue
+        const nx = x + dx
+        const ny = y + dy
+        if (nx >= 0 && ny >= 0 && nx < width && ny < height && tiles[idx(width, nx, ny)]!.isMine) return true
+      }
+    }
+    return false
+  }
+  for (const t of tiles) {
+    if (t.isMine || t.tier === 'common' || t.tier === 'boss') continue
+    if (!mineWithinBlast(t.x, t.y)) {
+      const band = cfg.bands.common
+      ;(t as { tier: Tier }).tier = 'common'
+      t.hp = rng.int(band.minHp, band.maxHp)
+      ;(t as { maxHp: number }).maxHp = t.hp
+    }
+  }
+
   // Adjacency counts for ground tiles.
   const board: Board = { width, height, tiles, opening, mineCount: mineCells.size }
   for (const t of tiles) {

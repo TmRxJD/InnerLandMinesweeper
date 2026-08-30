@@ -26,8 +26,10 @@ export interface DifficultyConfig {
   readonly bands: Readonly<Record<Tier, TierBand>>
   /** Fixed timer budget in seconds. Generous by design; kills stalls, not thinking. */
   readonly timerSeconds: number
-  /** Starting player charge. Must cover at least a few Light clears. */
+  /** Starting player charge. Must cover at least a few Common clears. */
   readonly startingCharge: number
+  /** Hard ceiling on the player's charge pool — detonations can't inflate it past this. */
+  readonly maxPlayerCharge: number
   /** Base blast damage before the mine's charge multiplier. */
   readonly blastBaseDamage: number
   /** Chebyshev radius of a detonation. Blasts vaporise without revealing numbers, so a
@@ -80,7 +82,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     bands: SHARED_BANDS,
     timerSeconds: 300,
     startingCharge: 12,
-    blastBaseDamage: 3,
+    maxPlayerCharge: 20,
+    blastBaseDamage: 9,
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
@@ -100,7 +103,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     bands: SHARED_BANDS,
     timerSeconds: 420,
     startingCharge: 12,
-    blastBaseDamage: 3,
+    maxPlayerCharge: 20,
+    blastBaseDamage: 9,
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
@@ -120,7 +124,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     bands: SHARED_BANDS,
     timerSeconds: 600,
     startingCharge: 14,
-    blastBaseDamage: 3,
+    maxPlayerCharge: 24,
+    blastBaseDamage: 9,
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
