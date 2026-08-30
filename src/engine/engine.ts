@@ -98,14 +98,16 @@ class Engine implements MinesweeperEngine {
     const gained = Math.round(tile.mineCharge * this.cfg.chargeConversion)
     if (gained !== 0) this.setPlayerCharge(this.playerCharge + gained, events)
 
-    // 2. The mine leaves the board.
-    const damage = this.cfg.blastBaseDamage * tile.mineCharge
+    // 2. The mine leaves the board. Peak damage lands on the ring next to the mine and
+    //    falls off with distance (see blastFalloff) — a blast is an explosion, not a slab,
+    //    so its edge only chips while its core clears.
+    const peakDamage = this.cfg.blastBaseDamage * tile.mineCharge
     const radiusTiles = withinRadius(this.board, tile.x, tile.y, this.cfg.blastRadius)
     tile.state = 'detonated'
     events.push({
       kind: 'mineDetonated',
       coord: { x: tile.x, y: tile.y },
-      damage,
+      damage: peakDamage,
       radius: radiusTiles.map(t => ({ x: t.x, y: t.y })),
     })
 
@@ -121,7 +123,11 @@ class Engine implements MinesweeperEngine {
         continue
       }
       if (t.state === 'cleared') continue
-      t.hp -= damage
+      // Distance falloff: the ring next to the mine (dist 1) takes peak damage; each ring
+      // further out is multiplied by blastFalloff again. HP matters at range.
+      const dist = Math.max(Math.abs(t.x - tile.x), Math.abs(t.y - tile.y))
+      const dmg = Math.round(peakDamage * Math.pow(this.cfg.blastFalloff, Math.max(0, dist - 1)))
+      t.hp -= dmg
       if (t.hp <= 0) {
         // Vaporised by the blast: cleared, but its number is never revealed. Information
         // stays tied to risky manual taps.

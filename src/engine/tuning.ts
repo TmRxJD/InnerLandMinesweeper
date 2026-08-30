@@ -20,9 +20,9 @@ export interface DifficultyConfig {
    *  tiles; you *can* chip tough tiles by hand, but slowly (see handTapDamage), so mines
    *  stay valuable while their count can drop with difficulty. */
   readonly mineCount: number
-  /** Max HP a single hand-tap removes. Commons (HP ≤ 2) still clear in one tap; tough tiles
-   *  take many taps, so a blast (9× charge, uncapped) is far better. Lower = tougher to
-   *  hand-clear, so scarce mines matter more. */
+  /** Max HP a single hand-tap removes (also the charge it costs). Commons clear in one tap;
+   *  Advanced take ~2, Elite ~3, Fleet ~4, and the Boss a dozen-plus — the HP bar is the
+   *  pacing. A charged mine still clears a cluster far faster. Lower = slower to hand-clear. */
   readonly handTapDamage: number
   /** Relative weights for tier assignment across the board. */
   readonly tierWeights: Readonly<Record<Tier, number>>
@@ -36,8 +36,14 @@ export interface DifficultyConfig {
   readonly startingCharge: number
   /** Hard ceiling on the player's charge pool — detonations can't inflate it past this. */
   readonly maxPlayerCharge: number
-  /** Base blast damage before the mine's charge multiplier. */
+  /** Peak blast damage (before the mine's charge multiplier), dealt to the ring next to the
+   *  mine. Falls off with distance — see blastFalloff. */
   readonly blastBaseDamage: number
+  /** Per-ring damage multiplier as a blast travels outward from the mine. The adjacent ring
+   *  (distance 1) takes full `blastBaseDamage × charge`; distance 2 takes that × blastFalloff,
+   *  distance 3 × blastFalloff², and so on. < 1 makes a blast an explosion (strong core, weak
+   *  edge) instead of a uniform slab, so tile HP decides what survives at range. */
+  readonly blastFalloff: number
   /** Chebyshev radius of a detonation. Blasts vaporise without revealing numbers, so a
    *  wider radius clears more ground without leaking information — it is the main engine
    *  of board clearing, not a scanner. */
@@ -60,11 +66,11 @@ export interface DifficultyConfig {
  * is far tougher than the ramp and only ever appears once, at board centre.
  */
 const SHARED_BANDS: Record<Tier, TierBand> = {
-  common: { minHp: 1, maxHp: 2 },
-  advanced: { minHp: 2, maxHp: 4 },
-  elite: { minHp: 4, maxHp: 6 },
-  fleet: { minHp: 6, maxHp: 9 },
-  boss: { minHp: 20, maxHp: 32 },
+  common: { minHp: 2, maxHp: 4 },
+  advanced: { minHp: 5, maxHp: 9 },
+  elite: { minHp: 10, maxHp: 16 },
+  fleet: { minHp: 18, maxHp: 28 },
+  boss: { minHp: 60, maxHp: 90 },
 }
 
 export const SCORE_CHAIN_WEIGHT = 25
@@ -75,7 +81,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 9,
     height: 9,
     mineCount: 16,
-    handTapDamage: 4,
+    handTapDamage: 6,
     tierWeights: { common: 13, advanced: 4, elite: 1.6, fleet: 0.5, boss: 0 },
     hardGroundGradient: 0.16,
     maxMineCharge: 6,
@@ -83,18 +89,19 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     timerSeconds: 300,
     startingCharge: 9,
     maxPlayerCharge: 10,
-    blastBaseDamage: 5,
+    blastBaseDamage: 10,
     blastRadius: 2,
+    blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
-    chargeRegenPerSecond: 0.3,
+    chargeRegenPerSecond: 1.2,
     scoreDifficultyMultiplier: 1,
   },
   standard: {
     width: 11,
     height: 11,
     mineCount: 12,
-    handTapDamage: 4,
+    handTapDamage: 6,
     tierWeights: { common: 11, advanced: 4.5, elite: 2.2, fleet: 0.9, boss: 0 },
     hardGroundGradient: 0.2,
     maxMineCharge: 6,
@@ -102,18 +109,19 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     timerSeconds: 420,
     startingCharge: 9,
     maxPlayerCharge: 10,
-    blastBaseDamage: 5,
+    blastBaseDamage: 10,
     blastRadius: 2,
+    blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
-    chargeRegenPerSecond: 0.3,
+    chargeRegenPerSecond: 1.3,
     scoreDifficultyMultiplier: 1.6,
   },
   hard: {
     width: 15,
     height: 15,
     mineCount: 11,
-    handTapDamage: 4,
+    handTapDamage: 6,
     tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
     hardGroundGradient: 0.26,
     maxMineCharge: 7,
@@ -121,11 +129,12 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     timerSeconds: 900,
     startingCharge: 12,
     maxPlayerCharge: 14,
-    blastBaseDamage: 5,
+    blastBaseDamage: 10,
     blastRadius: 2,
+    blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
-    chargeRegenPerSecond: 0.5,
+    chargeRegenPerSecond: 1.5,
     scoreDifficultyMultiplier: 2.4,
   },
 }
