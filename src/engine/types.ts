@@ -75,6 +75,8 @@ export interface BoardSnapshot {
   readonly playerCharge: number
   /** Seconds left on the fixed budget. Loss fires when this hits 0. */
   readonly timeRemaining: number
+  /** Total player actions taken so far (reveals + detonations). */
+  readonly moves: number
   readonly status: GameStatus
 }
 

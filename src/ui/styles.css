@@ -137,6 +137,8 @@
 }
 .ilm-stats .ilm-stat--charge { justify-self: start; }
 .ilm-stats .ilm-stat--time { justify-self: center; text-align: center; }
+.ilm-stats .ilm-stat--moves { justify-self: end; text-align: right; min-width: 0; }
+.ilm-stat--moves .ilm-stat__value { color: var(--ink-dim); }
 /* Controls stretch to evenly fill the row width, so text changes (Watch/Stop demo)
    never resize a button or shift its neighbours. */
 .ilm-controls {
@@ -335,6 +337,9 @@
   transition: transform 90ms ease, background 120ms ease, box-shadow 120ms ease;
 }
 .reduce-motion .ilm-tile { transition: none; }
+/* Every child of a tile is transparent to pointer events, so a click ALWAYS lands on the
+   button itself (which owns the handler) — no child can swallow a detonation click. */
+.ilm-tile > * { pointer-events: none; }
 .ilm-tile:focus-visible { outline: 2px solid var(--energy); outline-offset: 2px; z-index: 6; }
 .ilm-tile:hover:not(.is-cleared):not(.is-destroyed) { transform: translateY(-1px); }
 

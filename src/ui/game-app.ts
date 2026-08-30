@@ -86,6 +86,7 @@ export class GameApp {
   private elChargeFill!: HTMLElement
   private elTime!: HTMLElement
   private elTimeStat!: HTMLElement
+  private elMoves!: HTMLElement
   private elCoach!: HTMLElement
   private helpDialog!: HTMLElement
 
@@ -127,6 +128,7 @@ export class GameApp {
     this.elChargeFill = root.querySelector('.ilm-chargebar__fill')!
     this.elTime = root.querySelector('[data-time]')!
     this.elTimeStat = root.querySelector('.ilm-stat--time')!
+    this.elMoves = root.querySelector('[data-moves]')!
     this.elCoach = root.querySelector('[data-coach]')!
     this.helpDialog = root.querySelector('[data-help-dialog]')!
 
@@ -171,6 +173,10 @@ export class GameApp {
           <div class="ilm-stat ilm-stat--time">
             <span class="ilm-stat__label">Time</span>
             <span class="ilm-stat__value" data-time>0:00</span>
+          </div>
+          <div class="ilm-stat ilm-stat--moves">
+            <span class="ilm-stat__label">Moves</span>
+            <span class="ilm-stat__value" data-moves>0</span>
           </div>
         </div>
         <div class="ilm-controls">
@@ -484,6 +490,7 @@ export class GameApp {
     this.elChargeFill.style.setProperty('--charge-pct', `${pct}%`)
     this.elTime.textContent = this.fmtTime(snap.timeRemaining)
     this.elTimeStat.classList.toggle('is-low', snap.timeRemaining <= 30)
+    this.elMoves.textContent = String(snap.moves)
     this.updateCoach(snap)
   }
 

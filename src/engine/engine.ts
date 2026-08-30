@@ -159,6 +159,7 @@ class Engine implements MinesweeperEngine {
       tiles: this.board.tiles.map(t => this.view(t)),
       playerCharge: this.playerCharge,
       timeRemaining: this.timeRemaining,
+      moves: this.moves,
       status: this.status,
     }
   }
