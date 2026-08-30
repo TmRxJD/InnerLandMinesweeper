@@ -130,7 +130,10 @@ class Engine implements MinesweeperEngine {
       // one — HP scales cleanly and no single blast flattens a full-HP tile.
       const dist = Math.max(Math.abs(t.x - tile.x), Math.abs(t.y - tile.y))
       const frac = peakFraction * Math.pow(this.cfg.blastFalloff, Math.max(0, dist - 1))
-      const dmg = Math.max(0, Math.round(t.maxHp * frac))
+      // The Boss resists the percentage wipe — otherwise a fraction of its huge HP is still a
+      // huge number and one blast nearly kills it. Resisted, it's a hand-chip duel.
+      const resist = t.tier === 'boss' ? this.cfg.bossBlastResist : 1
+      const dmg = Math.max(0, Math.round(t.maxHp * frac * resist))
       t.hp -= dmg
       if (t.hp <= 0) {
         // Vaporised by the blast: cleared, but its number is never revealed. Information

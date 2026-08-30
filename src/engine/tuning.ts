@@ -42,6 +42,10 @@ export interface DifficultyConfig {
    *  tough tile — it takes the same number of blasts as a weak one. Falls off with distance
    *  (blastFalloff). */
   readonly blastPct: number
+  /** Multiplier on blast damage to the Boss only (0..1). A percentage-of-max blast otherwise
+   *  trivialises the Boss — a fraction of its 60-90 HP is still a large flat number — so it
+   *  resists blasts and must largely be worn down by hand. */
+  readonly bossBlastResist: number
   /** Per-ring multiplier as a blast travels outward from the mine. The adjacent ring
    *  (distance 1) takes the full `blastPct × charge` fraction; distance 2 takes that ×
    *  blastFalloff, distance 3 × blastFalloff², and so on. < 1 makes a blast an explosion
@@ -94,6 +98,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     startingCharge: 9,
     maxPlayerCharge: 10,
     blastPct: 0.9,
+    bossBlastResist: 0.15,
     blastRadius: 2,
     blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
@@ -114,6 +119,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     startingCharge: 9,
     maxPlayerCharge: 10,
     blastPct: 0.9,
+    bossBlastResist: 0.15,
     blastRadius: 2,
     blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
@@ -134,6 +140,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     startingCharge: 12,
     maxPlayerCharge: 14,
     blastPct: 0.9,
+    bossBlastResist: 0.15,
     blastRadius: 2,
     blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
