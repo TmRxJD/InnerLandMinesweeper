@@ -170,7 +170,9 @@ describe('detonation', () => {
     const before = engine.snapshot().playerCharge
     const events = engine.detonate(mine)
     expect(events.some(e => e.kind === 'mineDetonated')).toBe(true)
-    expect(engine.snapshot().playerCharge).toBe(before + Math.round(1 * cfg.chargeConversion))
+    // Conversion adds charge, clamped to the pool cap.
+    const expected = Math.min(cfg.maxPlayerCharge, before + Math.round(1 * cfg.chargeConversion))
+    expect(engine.snapshot().playerCharge).toBe(expected)
     const view = engine.snapshot().tiles.find(t => t.coord.x === mine.x && t.coord.y === mine.y)!
     expect(view.state).toBe('detonated')
   })
