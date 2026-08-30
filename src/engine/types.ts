@@ -38,8 +38,9 @@ export interface TileView {
   readonly tier: Tier
   readonly state: TileState
   /**
-   * Adjacent-mine count. Present only once `state === 'cleared'`. Reflects mines that
-   * are *currently* on the board — it decrements as neighbours detonate, and can reach 0.
+   * Adjacent-mine count. Present only for a tile cleared by a *manual* click or cascade —
+   * never for a blast-vaporised tile, whose number stays unknown. Reflects mines that are
+   * *currently* on the board: it decrements as neighbours detonate, and can reach 0.
    */
   readonly number?: number
   /** 0..1 crack progress for a chipped-but-not-cleared tile. Present only when cracked. */
@@ -83,6 +84,9 @@ export type GameStatus = 'playing' | 'won' | 'lost'
 export type GameEvent =
   | { kind: 'mineArmed'; coord: Coord; mineCharge: number; via: CauseOfArming }
   | { kind: 'tileCleared'; coord: Coord; number: number; cascadeDistance: number; chargeSpent: number }
+  // A blast vaporises a tile: it counts as cleared, but its number is never revealed —
+  // information stays tied to risky manual clicks, and blasts stay free of info leakage.
+  | { kind: 'tileDestroyed'; coord: Coord }
   | { kind: 'tileCracked'; coord: Coord; crack: number; hpKnockedDown: number; chargeDrained: number }
   | { kind: 'mineDetonated'; coord: Coord; damage: number; radius: readonly Coord[] }
   | { kind: 'mineChargeChanged'; coord: Coord; from: number; to: number }

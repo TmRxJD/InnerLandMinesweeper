@@ -11,8 +11,6 @@ import type { Difficulty, Tier } from './types'
 export interface TierBand {
   readonly minHp: number
   readonly maxHp: number
-  /** Player-charge cost to cleanly clear a ground tile of this tier. */
-  readonly clickCost: number
 }
 
 export interface DifficultyConfig {
@@ -31,26 +29,36 @@ export interface DifficultyConfig {
   readonly startingCharge: number
   /** Base blast damage before the mine's charge multiplier. */
   readonly blastBaseDamage: number
-  /** Chebyshev radius of a detonation. Tight by design. */
+  /** Chebyshev radius of a detonation. Blasts vaporise without revealing numbers, so a
+   *  wider radius clears more ground without leaking information — it is the main engine
+   *  of board clearing, not a scanner. */
   readonly blastRadius: number
   /** Charge a mine gains per overlapping blast. */
   readonly chargeGainPerOverlap: number
   /** Fraction of a detonated mine's charge that converts into the player pool. */
   readonly chargeConversion: number
-  /** Base seconds lost on a chip (over-HP click). Escalates with repeats. */
+  /** Base seconds lost on the first chip (over-HP click). */
   readonly crackTimePenalty: number
-  /** Multiplier applied to crackTimePenalty per repeated chip on the same tile. */
-  readonly crackPenaltyEscalation: number
+  /** Extra seconds added per prior chip this game — linear, so one mistake is cheap but
+   *  sustained blind-probing compounds. Capped by `crackPenaltyCap`. */
+  readonly crackPenaltyGrowth: number
+  /** Ceiling on a single chip's time penalty, so the spiral can't become unrecoverable
+   *  in one click. */
+  readonly crackPenaltyCap: number
   /** Fraction of remaining HP knocked off a tile per chip. */
   readonly crackKnockdown: number
   readonly scoreDifficultyMultiplier: number
 }
 
+/**
+ * A clean clear costs the tile's hidden HP in player charge (1 charge per HP). The tier
+ * is the *visible* band; the exact cost within it is hidden, and that gap is the risk.
+ */
 const SHARED_BANDS: Record<Tier, TierBand> = {
-  light: { minHp: 1, maxHp: 2, clickCost: 1 },
-  medium: { minHp: 2, maxHp: 4, clickCost: 3 },
-  heavy: { minHp: 4, maxHp: 6, clickCost: 6 },
-  elite: { minHp: 6, maxHp: 9, clickCost: 10 },
+  light: { minHp: 1, maxHp: 2 },
+  medium: { minHp: 2, maxHp: 4 },
+  heavy: { minHp: 4, maxHp: 6 },
+  elite: { minHp: 6, maxHp: 9 },
 }
 
 export const SCORE_CHAIN_WEIGHT = 25
@@ -65,13 +73,14 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hardGroundGradient: 0.4,
     bands: SHARED_BANDS,
     timerSeconds: 300,
-    startingCharge: 8,
-    blastBaseDamage: 2,
-    blastRadius: 1,
+    startingCharge: 12,
+    blastBaseDamage: 3,
+    blastRadius: 2,
     chargeGainPerOverlap: 1,
-    chargeConversion: 1,
-    crackTimePenalty: 4,
-    crackPenaltyEscalation: 1.6,
+    chargeConversion: 3,
+    crackTimePenalty: 3,
+    crackPenaltyGrowth: 0.6,
+    crackPenaltyCap: 25,
     crackKnockdown: 0.34,
     scoreDifficultyMultiplier: 1,
   },
@@ -83,13 +92,14 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hardGroundGradient: 0.55,
     bands: SHARED_BANDS,
     timerSeconds: 420,
-    startingCharge: 8,
-    blastBaseDamage: 2,
-    blastRadius: 1,
+    startingCharge: 12,
+    blastBaseDamage: 3,
+    blastRadius: 2,
     chargeGainPerOverlap: 1,
-    chargeConversion: 1,
-    crackTimePenalty: 5,
-    crackPenaltyEscalation: 1.7,
+    chargeConversion: 3,
+    crackTimePenalty: 4,
+    crackPenaltyGrowth: 0.6,
+    crackPenaltyCap: 28,
     crackKnockdown: 0.3,
     scoreDifficultyMultiplier: 1.6,
   },
@@ -101,13 +111,14 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hardGroundGradient: 0.7,
     bands: SHARED_BANDS,
     timerSeconds: 600,
-    startingCharge: 8,
-    blastBaseDamage: 2,
-    blastRadius: 1,
+    startingCharge: 14,
+    blastBaseDamage: 3,
+    blastRadius: 2,
     chargeGainPerOverlap: 1,
-    chargeConversion: 1,
-    crackTimePenalty: 6,
-    crackPenaltyEscalation: 1.8,
+    chargeConversion: 3,
+    crackTimePenalty: 4,
+    crackPenaltyGrowth: 0.5,
+    crackPenaltyCap: 30,
     crackKnockdown: 0.28,
     scoreDifficultyMultiplier: 2.4,
   },

@@ -1,9 +1,9 @@
 /**
  * Public engine surface. The UI layer and any host import from here and nowhere deeper.
- *
- * The concrete engine implementation is not written yet — this barrel currently exports
- * only the type contract and tuning. `createEngine` lands next.
  */
+
+export { createEngine } from './engine'
+export { randomSeed } from './rng'
 
 export type {
   Tier,

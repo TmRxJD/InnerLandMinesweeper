@@ -91,8 +91,9 @@ begins accumulating charge from nearby blasts. This is the good outcome. Uncover
 charge.
 
 **It's ground you can afford.** It clears, revealing its number: how many mines are adjacent, exactly
-as in classic Minesweeper. The click costs player charge scaled to the tile's tier — Light is cheap,
-Elite is expensive.
+as in classic Minesweeper. Charge is a **damage currency**: a clean clear costs the tile's *hidden HP*
+(one charge per HP). The tier tells you the band — Light is cheap, Elite is expensive — but never the
+exact cost, and that gap is the risk.
 
 **It's ground you can't afford.** You don't die, and you aren't blocked. Instead the click *chips*:
 
@@ -118,16 +119,19 @@ long-press or a detonate mode on touch). This split is the heart of the strategy
 
 A blast:
 
-- deals `base damage × that mine's charge` to tiles in a **tight radius**
-- clears tiles whose HP is at or below the damage; cracks the rest
+- deals `base damage × that mine's charge` to tiles in its radius
+- **vaporises** tiles whose HP is at or below the damage; cracks the rest
 - **charges every other armed mine whose blast radius overlaps the ground it just cleared**
 - **uncovers and arms** any undiscovered mine caught in the radius, without detonating it
 
-The radius is deliberately tight. Blasts are tactical tools, not scanners — if they cleared wide
-areas, they'd hand out free numbers and the "information costs risk" loop would collapse.
+**A vaporised tile never reveals its number.** This is the key to keeping blasts honest: a manual
+click buys information (you paid risk for a number), but a blast only clears *space*. Because blasts
+leak no information, they can clear a generous area — and clearing the board is mostly their job.
+Manual clicking is how you *read* the board and find your mines; detonation is how you *clear* it.
 
-The interesting decision is sequencing. With three mines armed, firing them in the right order routes
-overlaps so each blast pumps the next. That chain is what the score rewards.
+The interesting decision is sequencing. With several mines armed, firing them in the right order
+routes overlaps so each blast pumps the next, and a charged mine vaporises a wide, tough area. That
+chain is what the score rewards.
 
 ---
 
@@ -255,11 +259,18 @@ simulation harness plus real play, not by more discussion:
 - What mine density makes deduction interesting rather than noisy?
 - How steep should the hard-ground gradient be?
 
-**The known balance risk:** clicking costs almost nothing once your charge is already spent, so
-"dump charge, then blind-click the board to find mines" is a candidate strategy that would replace
-deduction with brute force. The escalating chip penalty exists to kill it. An adversarial bot that
-plays exactly that way is part of the test suite, and if it beats the honest bot, the constants are
-wrong.
+**The known balance risk:** "dump charge, then blind-click the board to find mines" is a candidate
+strategy that would replace deduction with brute force. Two mechanics kill it: a broke player deals
+*zero* damage (so blind ground-clicks never actually clear), and an escalating time penalty on chips.
+An adversarial bot that plays exactly that way is part of the test suite, and if it beats the honest
+bot, the constants are wrong.
+
+**Current harness result** (headless, non-deducing bots, 150 boards/difficulty): a sensible "greedy"
+player wins **95% / 95% / 84%** across Gentle / Standard / Hard and clears the full board; the
+blind-prober wins **0%** everywhere, clearing 2–8% before the clock kills it. So the economy is
+solvent and honest play beats brute force decisively. What the harness does *not* answer is feel —
+the greedy bot still cracks 8–15 times a game, where a deducing human should crack far less. These
+are floor numbers, not the ceiling, and real play will move the constants.
 
 ---
 
