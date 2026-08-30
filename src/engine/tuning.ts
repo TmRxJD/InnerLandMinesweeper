@@ -42,16 +42,6 @@ export interface DifficultyConfig {
   readonly maxMineCharge: number
   /** Fraction of a detonated mine's charge that converts into the player pool. */
   readonly chargeConversion: number
-  /** Base seconds lost on the first chip (over-HP click). */
-  readonly crackTimePenalty: number
-  /** Extra seconds added per prior chip this game — linear, so one mistake is cheap but
-   *  sustained blind-probing compounds. Capped by `crackPenaltyCap`. */
-  readonly crackPenaltyGrowth: number
-  /** Ceiling on a single chip's time penalty, so the spiral can't become unrecoverable
-   *  in one click. */
-  readonly crackPenaltyCap: number
-  /** Fraction of remaining HP knocked off a tile per chip. */
-  readonly crackKnockdown: number
   readonly scoreDifficultyMultiplier: number
 }
 
@@ -87,10 +77,6 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
-    crackTimePenalty: 3,
-    crackPenaltyGrowth: 0.6,
-    crackPenaltyCap: 25,
-    crackKnockdown: 0.34,
     scoreDifficultyMultiplier: 1,
   },
   standard: {
@@ -108,10 +94,6 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
-    crackTimePenalty: 4,
-    crackPenaltyGrowth: 0.6,
-    crackPenaltyCap: 28,
-    crackKnockdown: 0.3,
     scoreDifficultyMultiplier: 1.6,
   },
   hard: {
@@ -129,10 +111,6 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
-    crackTimePenalty: 4,
-    crackPenaltyGrowth: 0.5,
-    crackPenaltyCap: 30,
-    crackKnockdown: 0.28,
     scoreDifficultyMultiplier: 2.4,
   },
 }

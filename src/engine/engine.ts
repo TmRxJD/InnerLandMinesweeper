@@ -122,13 +122,13 @@ class Engine implements MinesweeperEngine {
       if (t.state === 'cleared') continue
       t.hp -= damage
       if (t.hp <= 0) {
-        // Vaporised by the blast: cleared, but its number is never revealed and it does
-        // not seed a cascade. Information stays tied to risky manual clicks.
+        // Vaporised by the blast: cleared, but its number is never revealed. Information
+        // stays tied to risky manual taps.
         this.destroyGroundTile(t, events)
         clearedByBlast.push(t)
         chainCleared += 1
       } else {
-        this.damageTile(t, damage, events, /*chargeSpent*/ false)
+        this.damageTile(t, events)
       }
     }
 
@@ -137,7 +137,6 @@ class Engine implements MinesweeperEngine {
     if (clearedByBlast.length > 0) this.chargeOverlappingMines(tile, clearedByBlast, events)
 
     if (chainCleared > this.maxChain) this.maxChain = chainCleared
-    if (chainCleared > 0) events.push({ kind: 'chainLink', depth: chainCleared })
 
     this.checkWin(events)
     return events
@@ -186,31 +185,24 @@ class Engine implements MinesweeperEngine {
       return
     }
 
-    // Chip: spend whatever charge remains as partial damage. A broke player (0 charge)
-    // deals nothing but still burns time — this is what makes blind-probing lose.
+    // Under-charged tap: spend whatever charge remains as partial damage (a broke player
+    // deals nothing). The HP bar shows the dent; finish it with more charge later.
     const damage = this.playerCharge
     if (damage > 0) {
       tile.hp -= damage
       this.setPlayerCharge(0, events)
     }
-    this.damageTile(tile, damage, events, /*chargeSpent*/ true)
+    this.damageTile(tile, events)
     this.checkWin(events)
   }
 
-  /** Tapped a tappable tile (Common or Boss) without enough charge to finish it: deal the
-   *  partial damage and leave it damaged. The HP bar shows the progress — no separate crack
-   *  overlay, no time penalty (removed: the health bar already conveys this). */
-  private damageTile(tile: Tile, damage: number, events: GameEvent[], chargeSpent: boolean): void {
+  /** A tappable tile (Common or Boss) took partial damage (charge spent < its HP, or a blast
+   *  that didn't finish it): leave it damaged. The HP bar shows the progress. */
+  private damageTile(tile: Tile, events: GameEvent[]): void {
     this.cracks++
     if (tile.state !== 'cracked') tile.state = 'cracked'
     const crack = Math.max(0, Math.min(1, 1 - tile.hp / tile.maxHp))
-    events.push({
-      kind: 'tileCracked',
-      coord: { x: tile.x, y: tile.y },
-      crack,
-      hpKnockedDown: damage,
-      chargeDrained: chargeSpent ? damage : 0,
-    })
+    events.push({ kind: 'tileCracked', coord: { x: tile.x, y: tile.y }, crack })
   }
 
   private clearGroundTile(tile: Tile, chargeSpent: number, events: GameEvent[]): void {
@@ -218,13 +210,7 @@ class Engine implements MinesweeperEngine {
     tile.numberKnown = true
     tile.hp = 0
     this.tilesCleared++
-    events.push({
-      kind: 'tileCleared',
-      coord: { x: tile.x, y: tile.y },
-      number: tile.adjacent,
-      cascadeDistance: 0,
-      chargeSpent,
-    })
+    events.push({ kind: 'tileCleared', coord: { x: tile.x, y: tile.y }, number: tile.adjacent, chargeSpent })
   }
 
   private destroyGroundTile(tile: Tile, events: GameEvent[]): void {

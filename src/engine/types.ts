@@ -93,20 +93,19 @@ export type GameStatus = 'playing' | 'won' | 'lost'
  */
 export type GameEvent =
   | { kind: 'mineArmed'; coord: Coord; mineCharge: number; via: CauseOfArming }
-  | { kind: 'tileCleared'; coord: Coord; number: number; cascadeDistance: number; chargeSpent: number }
+  | { kind: 'tileCleared'; coord: Coord; number: number; chargeSpent: number }
   // A blast vaporises a tile: it counts as cleared, but its number is never revealed —
-  // information stays tied to risky manual clicks, and blasts stay free of info leakage.
+  // information stays tied to risky manual taps, and blasts stay free of info leakage.
   | { kind: 'tileDestroyed'; coord: Coord }
   // Tapped a tough (non-Common) ground tile: it can't be cleared by hand — only a mine
   // blast reduces its HP. No state change; the UI nudges the player.
   | { kind: 'tileShielded'; coord: Coord; tier: Tier }
-  | { kind: 'tileCracked'; coord: Coord; crack: number; hpKnockedDown: number; chargeDrained: number }
+  // A tappable tile (Common/Boss) took partial damage; the HP bar reflects `crack` (0..1).
+  | { kind: 'tileCracked'; coord: Coord; crack: number }
   | { kind: 'mineDetonated'; coord: Coord; damage: number; radius: readonly Coord[] }
   | { kind: 'mineChargeChanged'; coord: Coord; from: number; to: number }
   | { kind: 'numberDecremented'; coord: Coord; from: number; to: number }
   | { kind: 'playerChargeChanged'; from: number; to: number }
-  | { kind: 'timePenalty'; seconds: number; reason: 'crack' | 'chipGrind' }
-  | { kind: 'chainLink'; depth: number } // one step of a detonation-triggered chain; max depth feeds maxChain
   | { kind: 'gameWon'; result: GameResult }
   | { kind: 'gameLost'; result: GameResult }
 

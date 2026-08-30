@@ -16,20 +16,18 @@ export interface Tile {
   readonly y: number
   readonly isMine: boolean
   tier: Tier
-  /** Hidden true HP, rolled within the tier's band. Chipping reduces `hp`. */
+   /** Hidden true HP, rolled within the tier's band. Damage reduces `hp`. */
   hp: number
-  /** The HP a fresh clean-clear must meet or beat. Immutable; `hp` drops as it's chipped. */
+  /** The HP a fresh clean-clear must meet or beat. Immutable; `hp` drops as it takes damage. */
   readonly maxHp: number
   state: TileState
   /** Mines only: charge multiplier, grows with overlapping blasts. */
   mineCharge: number
   /** Ground only: live adjacent-mine count, decrements as neighbours detonate. */
   adjacent: number
-  /** True once a manual clear/cascade has revealed this tile's number. A blast-vaporised
-   *  tile is cleared but leaves this false, so its number is never shown. */
+  /** True once a manual tap has revealed this tile's number. A blast-vaporised tile is
+   *  cleared but leaves this false, so its number is never shown. */
   numberKnown: boolean
-  /** How many times this tile has been chipped — drives the escalating time penalty. */
-  crackCount: number
 }
 
 export interface Board {
@@ -113,7 +111,7 @@ function upgradeTier(tier: Tier, steps: number): Tier {
 
 /**
  * Generate a board. Guarantees:
- *  - the opening cell is Common with zero adjacent mines (a free opening cascade),
+ *  - the opening cell is Common with zero adjacent mines (a safe first tap),
  *  - mines never sit in the opening's 8-neighbourhood (so its count is genuinely 0),
  *  - tough tiles cluster via a smooth hardness field scaled by `hardGroundGradient`.
  */
@@ -186,12 +184,11 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
         mineCharge: isMine ? 1 : 0,
         adjacent: 0,
         numberKnown: false,
-        crackCount: 0,
       }
     }
   }
 
-  // Force the opening tile to Common so its free cascade actually flows.
+  // Force the opening tile to Common so the guaranteed first tap is safe and cheap.
   const openTile = tiles[idx(width, opening.x, opening.y)]!
   if (openTile.tier !== 'common') {
     const band = cfg.bands.common

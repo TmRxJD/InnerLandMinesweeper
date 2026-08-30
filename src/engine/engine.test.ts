@@ -152,7 +152,6 @@ describe('tapping tiles', () => {
     const timeBefore = engine.snapshot().timeRemaining
     const events = engine.reveal({ x: cx, y: cy })
     expect(events.some(e => e.kind === 'tileCracked')).toBe(true)
-    expect(events.some(e => e.kind === 'timePenalty')).toBe(false) // penalty removed
     expect(engine.snapshot().timeRemaining).toBe(timeBefore) // tapping costs no time
     expect(engine.snapshot().playerCharge).toBe(0) // charge spent as damage
     const view = engine.snapshot().tiles.find(v => v.coord.x === cx && v.coord.y === cy)!

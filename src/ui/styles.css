@@ -1,9 +1,8 @@
 /* Inner Land Minesweeper — view layer styles.
  *
- * Theme is Tower "chrono": deep navy field, cyan energy, a warm→hot ramp for tougher
- * ground. Tier is NEVER encoded by colour alone — every tier also carries a distinct
- * border weight and a pip count (1–4), so the board reads without colour vision. All
- * motion is gated behind prefers-reduced-motion.
+ * Theme is Tower "chrono": deep navy field, cyan energy. Enemy class is shown by colour
+ * AND shape (the real recoloured Tower sprites) — never colour alone — plus a health bar,
+ * so the board reads without colour vision. All motion is gated behind prefers-reduced-motion.
  */
 
 :root {
@@ -277,7 +276,6 @@
 .ilm-help__sprite { width: 24px; height: 24px; object-fit: contain; }
 .ilm-help__swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 30px; }
 .ilm-help__swatches i { width: 100%; aspect-ratio: 1; border-radius: 3px; display: block; }
-.ilm-help__icon--crack { color: var(--danger); background-image: linear-gradient(45deg, transparent 44%, rgba(255,91,110,0.6) 46%, transparent 50%); }
 .ilm-help__icon--flag { color: var(--energy); }
 .ilm-help__keys { margin: 16px 0 18px; font-size: 12px; color: var(--ink-dim); }
 .ilm-help__got { width: 100%; }
@@ -520,13 +518,6 @@
   box-shadow: inset 0 0 0 2px var(--danger);
 }
 .reduce-motion .ilm-tile.shielded-bump { animation: none; }
-
-/* Just-revealed flip, gated for reduced motion. */
-@keyframes ilm-flip {
-  from { transform: rotateX(80deg); opacity: 0.3; }
-  to { transform: rotateX(0); opacity: 1; }
-}
-.ilm-tile.just-cleared:not(.reduce-motion *) { animation: ilm-flip 160ms ease; }
 
 /* ---- Status banner --------------------------------------------------- */
 
