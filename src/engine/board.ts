@@ -146,7 +146,7 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
   }
 
   // Mine placement: shuffle all non-reserved cells, take the first N.
-  const mineCount = Math.round(cfg.mineDensity * total)
+  const mineCount = cfg.mineCount
   const candidates: number[] = []
   for (let i = 0; i < total; i++) {
     if (!reserved.has(i)) candidates.push(i)

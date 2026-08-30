@@ -16,8 +16,9 @@ export interface TierBand {
 export interface DifficultyConfig {
   readonly width: number
   readonly height: number
-  /** Fraction of tiles that hide a mine. Higher than classic (~0.16) — mines are ammo. */
-  readonly mineDensity: number
+  /** Number of mines on the board — an explicit cap, not a density, so it doesn't balloon
+   *  with board area. Mines are your ammunition for clearing blast-only tough tiles. */
+  readonly mineCount: number
   /** Relative weights for tier assignment across the board. */
   readonly tierWeights: Readonly<Record<Tier, number>>
   /** How strongly tough tiles cluster together (0 = uniform, 1 = maximally clumped). */
@@ -65,7 +66,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   gentle: {
     width: 9,
     height: 9,
-    mineDensity: 0.23,
+    mineCount: 19,
     tierWeights: { common: 13, advanced: 4, elite: 1.6, fleet: 0.5, boss: 0 },
     hardGroundGradient: 0.16,
     maxMineCharge: 6,
@@ -82,7 +83,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   standard: {
     width: 11,
     height: 11,
-    mineDensity: 0.25,
+    mineCount: 30,
     tierWeights: { common: 11, advanced: 4.5, elite: 2.2, fleet: 0.9, boss: 0 },
     hardGroundGradient: 0.2,
     maxMineCharge: 6,
@@ -99,7 +100,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   hard: {
     width: 15,
     height: 15,
-    mineDensity: 0.26,
+    mineCount: 58,
     tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
     hardGroundGradient: 0.26,
     maxMineCharge: 7,

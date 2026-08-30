@@ -116,7 +116,7 @@ function fmtPct(x: number): string {
 
 function report(difficulty: Difficulty, aggs: Agg[]): void {
   const cfg = DIFFICULTIES[difficulty]
-  console.log(`\n=== ${difficulty.toUpperCase()}  (${cfg.width}x${cfg.height}, ${Math.round(cfg.mineDensity * 100)}% mines, ${cfg.timerSeconds}s) ===`)
+  console.log(`\n=== ${difficulty.toUpperCase()}  (${cfg.width}x${cfg.height}, ${cfg.mineCount} mines, ${cfg.timerSeconds}s) ===`)
   console.log(
     ['bot'.padEnd(12), 'win'.padStart(5), 'timeLeft'.padStart(9), 'cracks'.padStart(7), 'dets'.padStart(6), 'moves'.padStart(6), 'chain'.padStart(6), 'clr%'.padStart(5)].join(' '),
   )
