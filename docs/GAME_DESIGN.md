@@ -1,283 +1,226 @@
 # Inner Land Minesweeper — Game Design Overview
 
-**Status:** design locked, pre-implementation. Numbers marked _(tuning)_ are starting guesses to be
-settled by playtesting, not decisions.
+**Status:** playable, in tuning. This document describes the game **as it currently plays**. Numbers
+in the tuning table are the live values; they are still being tuned, not frozen.
 
 ---
 
 ## The pitch
 
-Minesweeper's fiction is backwards. You play a mine *sweeper*, but the game punishes you for finding
-a mine and makes you mark them with flags instead of clearing them. Inner Land Minesweeper flips that
-single assumption:
+Minesweeper's fiction is backwards. You play a mine *sweeper*, yet the game punishes you for finding
+a mine and makes you mark them with flags instead of clearing them. Inner Land Minesweeper flips that:
 
-> **Finding a mine is good. Mines are your weapons. Safe tiles are the dangerous click.**
+> **Finding a mine is good. Mines are your weapons. Enemies hold the board; you clear it before the
+> clock runs out.**
 
-Everything else follows from that flip. The result keeps Minesweeper's deduction completely intact
-while replacing "safe or dead" with a continuous risk economy:
-
-> **Information costs risk, and risk earns power.**
-
-You reveal safe tiles to read numbers. Numbers tell you where the mines are. Mines are ammunition.
-Ammunition clears ground. Clearing ground is how you win — before the clock runs out.
+Every hidden tile is a Tower enemy. Weak ones you kill by hand. Tougher ones are **shielded** — the
+only thing that hurts them is a **mine blast**. So the loop is: sweep the weak enemies to read the
+board and find your mines, then detonate mines to blow open the tough ground — and grind down the
+Boss at the centre before time runs out.
 
 ---
 
 ## Where it comes from
 
-The game is themed on *The Tower*'s Inner Land Mines and Chrono Jump. The mapping is deliberate and
-one-to-one:
+Themed on *The Tower*'s Inner Land Mines and its enemies. The mapping is deliberate:
 
 | The Tower | Inner Land Minesweeper |
 |---|---|
 | Inner Land Mines (ILMs) | The mines you uncover and detonate |
-| Enemies with HP | Tiles with HP |
-| ILM charge | Per-mine charge, grown by overlapping blasts |
-| Chrono Jump meter | Your player charge pool |
-| Recursive scaling on shared hits | Blasts that overlap charge each other |
-| Enemy HP outscaling your damage | Tougher tiles guarding the late board |
+| Enemies with HP | The tiles — each is a real Tower enemy |
+| Enemy categories (Normal / Elite / Fleet / Boss) | The tile classes |
+| ILM blast | Detonation damage in a radius |
+| ILM charge, recursive scaling on shared hits | Mine charge, grown by overlapping blasts |
 
-You do not need to know *The Tower* to play it. The theme is flavour; the game stands alone.
-
----
-
-## The board
-
-A rectangular grid. Every tile is one of two things — a **mine** or a **ground tile** — and the
-player cannot tell which by looking.
-
-Every tile, mine or not, displays a visible **HP tier**:
-
-| Tier | HP range _(tuning)_ |
-|---|---|
-| Light | 1–2 |
-| Medium | 2–4 |
-| Heavy | 4–6 |
-| Elite | 6–9 |
-
-Three things matter about tiers:
-
-- **The tier is visible from the first moment; the exact HP is never shown.** You know a tile is
-  Heavy. You don't know whether it's a 4 or a 6. That gap is where the risk lives.
-- **The bands overlap on purpose.** A Medium can roll a 2, exactly like a Light. The tier is a
-  *hint*, not a contract.
-- **Mines display a tier too**, drawn from the same distribution as ground tiles. If they didn't,
-  every mine on the board would be identifiable at a glance and there would be no game.
-
-Tough tiles are **clustered by the board generator**, not sprinkled randomly. You can see where the
-hard ground is before you commit, which makes route choice a real decision: open the soft region for
-cheap information, or push the hard region early while you still have charge to spend.
+You don't need to know *The Tower* to play. The theme is flavour; the game stands alone.
 
 ---
 
-## The two resources
+## Enemy classes
 
-**Player charge** is your risk budget. It is what you spend to click.
+Every tile is one of five classes, shown by **colour and shape** (the real extracted Tower sprites,
+recoloured so a class reads at a glance). Colour is never the only cue — each class is a distinct
+enemy silhouette too.
 
-**Mine charge** is a per-mine multiplier. Every uncovered mine has one, starting at 1×. It grows when
-another mine's blast overlaps ground that this mine's blast would also cover.
+| Class | Colour | Real enemies | HP band _(tuning)_ | Cleared by |
+|---|---|---|---|---|
+| **Common** | grey | Basic, Fast, Tank | 1–2 | **Tapping** (costs charge) |
+| **Advanced** | yellow | Ranged, Protector | 2–4 | **Mine blast only** |
+| **Elite** | blue | Vampire, Ray, Scatter | 4–6 | **Mine blast only** |
+| **Fleet** | red | Saboteur, Commander, Overcharge | 6–9 | **Mine blast only** |
+| **Boss** | magenta | Boss | 20–32 | **Tapping** (slow grind) + blasts |
 
-The two connect in one direction: **detonating a mine converts its charge into your player pool.** A
-mine you've patiently grown to 4× pays out far more than one you popped immediately.
+Three rules about HP:
+
+- **The class is visible from the start; the exact HP is hidden.** You know a tile is Fleet, not
+  whether it's a 6 or a 9. That gap is the risk when you spend charge.
+- **A health bar shows damage.** Every enemy shows a small HP bar; it drains as you hurt it. (This is
+  the only damage indicator — there is no separate "crack" overlay.)
+- **Tough classes cluster.** The generator clumps tough ground rather than sprinkling it, so you can
+  see where the hard terrain is and plan a route.
+
+Frequency is skewed hard toward Common (roughly **Common 60% · Advanced 17% · Elite 14% · Fleet 7%**,
+plus the single Boss), so weak enemies dominate and tough ones are the exception.
 
 ---
 
-## Clicking
+## Mines
 
-You click a tile. One of three things happens.
+Mines are hidden and look exactly like enemy tiles until you touch them — that's the deduction. There
+is **no flag**: you sweep mines, you don't mark them.
 
-**It's a mine.** It uncovers and **arms** — it does not explode. It now shows its charge ring and
-begins accumulating charge from nearby blasts. This is the good outcome. Uncovering a mine costs no
-charge.
+- **Tap a hidden mine → it arms.** It uncovers as a glowing **Inner Land Mine** with an `N×` charge
+  badge. This is free and safe. It does not explode.
+- **Tap an armed mine → it detonates.** (Two taps on the same tile: arm, then detonate. This split is
+  deliberate — it lets you arm several mines and choose the detonation order.)
 
-**It's ground you can afford.** It clears, revealing its number: how many mines are adjacent, exactly
-as in classic Minesweeper. Charge is a **damage currency**: a clean clear costs the tile's *hidden HP*
-(one charge per HP). The tier tells you the band — Light is cheap, Elite is expensive — but never the
-exact cost, and that gap is the risk.
+Mine density is **higher than classic Minesweeper's ~16%** (25–27%). Mines are ammunition, not
+hazards, so scarcity means you can't clear the tough ground.
 
-**It's ground you can't afford.** You don't die, and you aren't blocked. Instead the click *chips*:
+---
 
-- the tile cracks instead of clearing
-- your player charge drains sharply
-- you take a time penalty
-- the tile's remaining HP is knocked down, so it's cheaper next time
+## Tapping
 
-Charge never prevents a click. It only decides whether the click is clean or costly. That means there
-is no stalled state, and no board is ever unwinnable — you can always grind your way through a bad
-tile. It will just cost you the clock.
+You tap a hidden tile. What happens depends on what's under it:
 
-**The time penalty escalates** with repeated chipping, so a single honest misjudgement is cheap while
-grinding — or blind-clicking to hunt for mines — gets expensive fast.
+- **A Common** → it clears, revealing its number (adjacent mines, like classic Minesweeper). Clearing
+  costs **charge** equal to its hidden HP. If you can't pay in full you deal partial damage instead,
+  shown by the health bar — no time penalty, just slower.
+- **A mine** → it arms (see above). Free.
+- **An Advanced / Elite / Fleet tile** → **shielded.** Nothing happens but a red bump. You cannot hurt
+  these by hand; only a blast reduces their HP.
+- **The Boss** → it chips. The Boss is the one tough enemy you *can* work by hand, and with 20–32 HP
+  it takes several charged taps (and/or blasts) — the deliberate end-game grind.
+
+**One tile per tap.** There is no flood-fill: clearing a Common with zero adjacent mines opens only
+that tile. (This is a deliberate departure from classic Minesweeper — clearing is always a chosen,
+paid action.)
+
+---
+
+## Charge
+
+**Charge is your damage currency**, and it is **capped** (22 / 22 / 24 by difficulty) so detonations
+can't inflate it without bound. The HUD shows it as `current / max`.
+
+- **Spent** tapping Commons (and grinding the Boss).
+- **Refilled** by detonating mines — each detonation converts that mine's charge into your pool.
+
+Because tough tiles are cleared by blasts (free) and Commons are cheap, charge is a secondary
+resource; **mines are the primary one.**
 
 ---
 
 ## Detonation
 
-Detonating an armed mine is a **separate action** from uncovering it (right-click on desktop,
-long-press or a detonate mode on touch). This split is the heart of the strategy layer: you choose
-*when* and *in what order* your mines go off.
+Detonating an armed mine:
 
-A blast:
+- deals `9 × that mine's charge` damage to every tile in a **radius-2** (Chebyshev) square,
+- **vaporises** tiles whose HP it meets — clearing tough enemies and Commons alike, leaving craters,
+- **reveals no numbers** for what it vaporises (information stays tied to risky manual taps),
+- **converts the mine's charge into your (capped) pool**,
+- **uncovers and arms** any hidden mine caught in the blast (chain-arming), and
+- **charges every other armed mine whose blast area overlaps the ground it just cleared** — the
+  Chrono-Jump analogue. Mine charge is capped (6–7).
 
-- deals `base damage × that mine's charge` to tiles in its radius
-- **vaporises** tiles whose HP is at or below the damage; cracks the rest
-- **charges every other armed mine whose blast radius overlaps the ground it just cleared**
-- **uncovers and arms** any undiscovered mine caught in the radius, without detonating it
-
-**A vaporised tile never reveals its number.** This is the key to keeping blasts honest: a manual
-click buys information (you paid risk for a number), but a blast only clears *space*. Because blasts
-leak no information, they can clear a generous area — and clearing the board is mostly their job.
-Manual clicking is how you *read* the board and find your mines; detonation is how you *clear* it.
-
-The interesting decision is sequencing. With several mines armed, firing them in the right order
-routes overlaps so each blast pumps the next, and a charged mine vaporises a wide, tough area. That
-chain is what the score rewards.
+A single blast at base charge clears any one tough tile, so mines are powerful and the interesting
+question is **where and in what order** to detonate — a charged mine, or a cluster of overlapping
+mines, clears a whole region and pumps the survivors.
 
 ---
 
-## Numbers change as the board changes
+## Numbers stay honest
 
-When a mine detonates, it is **gone**, and every adjacent number **decrements**.
-
-This is a real departure from classic Minesweeper, where numbers are static because mines never
-leave. Here the constraint system is live: every number on the board is always *currently true*, and
-a number ticking to zero is a clean signal that its region is fully swept.
-
-And it has a consequence that turns out to be the best moment in the game:
-
-> **A revealed number that decrements to zero immediately cascades.**
-
-So a well-placed detonation doesn't just clear its blast radius — it can drop a `1` to a `0` and
-unzip a whole region behind it. Setting those up deliberately is the highest-skill play in the game.
-
----
-
-## Cascades
-
-As in classic Minesweeper, clearing a tile with zero adjacent mines opens its neighbours.
-
-Two rules keep this from breaking the economy:
-
-- **Cascades are free.** They never spend player charge. (An unpredictable drain on your banked
-  charge would punish exactly the patient play the game wants to reward.)
-- **Cascades only propagate through Light tiles.** They stop at anything tougher.
-
-Because tiers are visible, cascade size is *readable in advance* — "click into that Light cluster for
-a big open" is a decision you can actually make. And because tough tiles cluster more heavily as you
-push into hard ground, big cascades are naturally an early-game pleasure that fades exactly as the
-pressure rises.
+When a mine detonates it is **gone**, and every adjacent revealed number **decrements**. The
+constraint system is always currently true, and a number reaching zero cleanly signals a swept
+region. Numbers come only from tiles you cleared **by hand** (tapped Commons, or the Boss); blasts
+vaporise without revealing anything, so your information stays tied to the risky manual taps.
 
 ---
 
 ## Winning and losing
 
-**Win:** every ground tile cleared and every mine uncovered.
+**Win:** every ground tile cleared and every mine uncovered. (Armed mines you never detonated don't
+block the win, but you usually need them to clear the tough ground.)
 
-Armed mines you never detonated don't block the win — they're just wasted ammunition. Nothing forces
-you to detonate, because the economy already does: charge comes only from detonations, and hoarding
-means chip-grinding, and chip-grinding means the clock catches you.
-
-**Loss:** the timer runs out. That's the only way to lose.
-
-The timer is **generous and fixed per difficulty**. It is not meant to threaten a player who is
-thinking — Minesweeper is a game about sitting and staring at a `1-2-1` until it resolves, and a
-clock that punishes that would suppress the whole puzzle. It exists to kill stalled runs and to make
-chip-grinding a real cost. A competent player should rarely see it.
+**Lose:** the timer runs out. That's the only failure. It is **generous and fixed per difficulty** —
+it exists to bound a run, not to punish thinking, so a competent player rarely sees it.
 
 ---
 
 ## Score
 
-Winning is the baseline; the score ranks *how well* you won.
-
 ```
-score = (timeRemaining × difficultyMultiplier) + (chainWeight × maxChain) − (crackWeight × cracks)
+score = (timeRemaining × difficultyMultiplier) + (25 × maxChain) − (15 × cracks)
 ```
 
-- **timeRemaining** — efficiency
-- **maxChain** — the largest chain reaction you engineered, i.e. sequencing skill
-- **cracks** — how many times you clicked something you couldn't afford
+- **timeRemaining** — efficiency.
+- **maxChain** — the largest chain of clears one detonation produced (sequencing skill).
+- **cracks** — under-charged taps (an inefficiency count).
 
-Leaderboards are **per difficulty**; a 9×9 result and a 16×16 result aren't comparable.
-
-Tiles cleared and detonation count are recorded for the loss screen and analytics, but they're
-near-constant on a win, so they don't rank anything.
+Leaderboards are **per difficulty**; scores across sizes aren't comparable.
 
 ---
 
-## Difficulty
+## Board & difficulties
 
-Every difficulty is a set of tuning constants over the same rules:
+Boards are **odd squares** so the Boss sits at a true centre with an equal number of tiles on all four
+sides. Every board is **seeded and deterministic** (same seed → same board), which also powers the
+CLI, the harness, and any future daily/shareable board.
 
-board size · mine density · tier distribution and how hard ground clusters · click costs per tier ·
-blast radius and base damage · charge conversion rate · timer budget · chip penalty curve
+| Difficulty | Size | Mines | Timer | Start / Max charge |
+|---|---|---|---|---|
+| **Easy** | 9×9 | 25% | 5:00 | 14 / 22 |
+| **Standard** | 11×11 | 27% | 7:00 | 15 / 22 |
+| **Hard** | 15×15 | 26% | 10:00 | 14 / 24 |
 
-Mine density is **higher than classic Minesweeper's ~16%**. Mines are ammunition here, not hazards,
-so scarcity means starvation rather than safety.
-
-**Every board is seeded.** The seed goes into the result, so runs are reproducible and shareable, and
-a daily board is a trivial addition later.
-
-**The opening is guaranteed:** your first click always lands on a Light, zero-adjacent tile, giving a
-free opening cascade and a readable board. You start with enough charge to clear Light tiles _(tuning)_.
-
----
-
-## Accessibility and platform
-
-Non-negotiable, because tier is primary gameplay information:
-
-- **Tier is never encoded by colour alone.** Border weight, fill pattern, and iconography carry it
-  too. Same for crack severity.
-- **`prefers-reduced-motion` is honoured** — the shockwaves, particles, and screen shake all have a
-  calm path.
-- **Full keyboard navigation and screen-reader labelling.** The board is real DOM, not a canvas, and
-  this is most of the reason why.
-- **Touch is a first-class input**, not a port: tap to click, long-press or a mode toggle to detonate.
-- **Catastrophic clicks ask for confirmation** when visible information already says so ("this is
-  Elite and your charge is low"). It leaks nothing you couldn't already see, and it saves mobile
-  players from fat-finger disasters.
-- **The run pauses** on tab-hide and on navigating away. Nobody loses a run to a phone call.
+Generation guarantees: a **Common, zero-adjacent opening** for a safe first tap; the Boss pinned to
+centre; and — because tough tiles are blast-only — **every tough tile has a mine within blast range**
+(any that wouldn't is downgraded to a tappable Common), so no board can soft-lock.
 
 ---
 
-## What is settled, and what isn't
+## Accessibility & platform
 
-**Settled — the rules above.** Arm-then-detonate, the two-resource economy, tiers as hidden ranges,
-free Light-only cascades, chip-out instead of hard failure, decrementing numbers, zero-triggered
-cascades, tight blast radius, generous fixed timer, clear-the-board win, per-difficulty scoring.
-
-**Not settled — how any of it *feels*.** These are empirical and will be answered by a headless
-simulation harness plus real play, not by more discussion:
-
-- How generous does the timer need to be before thinking feels safe?
-- Is a tight blast radius still satisfying, or does it feel weak?
-- Is chip-grinding tense, or just tedious?
-- Does tier fuzz read as exciting uncertainty or as unfairness?
-- How often do decrement-cascades actually fire? Are they rare enough to feel special and common
-  enough to plan around?
-- What mine density makes deduction interesting rather than noisy?
-- How steep should the hard-ground gradient be?
-
-**The known balance risk:** "dump charge, then blind-click the board to find mines" is a candidate
-strategy that would replace deduction with brute force. Two mechanics kill it: a broke player deals
-*zero* damage (so blind ground-clicks never actually clear), and an escalating time penalty on chips.
-An adversarial bot that plays exactly that way is part of the test suite, and if it beats the honest
-bot, the constants are wrong.
-
-**Current harness result** (headless, non-deducing bots, 150 boards/difficulty): a sensible "greedy"
-player wins **95% / 95% / 84%** across Gentle / Standard / Hard and clears the full board; the
-blind-prober wins **0%** everywhere, clearing 2–8% before the clock kills it. So the economy is
-solvent and honest play beats brute force decisively. What the harness does *not* answer is feel —
-the greedy bot still cracks 8–15 times a game, where a deducing human should crack far less. These
-are floor numbers, not the ceiling, and real play will move the constants.
+- **Class is never colour-only** — each is a distinct enemy shape too.
+- **`prefers-reduced-motion` honoured** — shockwaves, particles, and screen-shake all have a calm path.
+- **Full keyboard navigation and ARIA** — the board is real DOM (roving tabindex, per-tile labels).
+- **Touch is first-class** — tap to clear/arm, tap the orb to detonate; the board fits phone widths.
+- **The run pauses** on tab-hide, so nobody loses to a phone call.
 
 ---
 
-## Feedback welcome on
+## Architecture & tooling
 
-1. Does the core flip — *finding mines is good* — read as clever or as a gimmick?
-2. Is a two-resource economy one resource too many?
-3. Is losing only to a clock enough tension, given classic Minesweeper's instant death?
-4. Is the arm-then-detonate split worth the extra input, or should uncovering just detonate?
-5. Does hidden-HP-within-a-visible-tier feel fair?
+- **Framework-free engine** (`src/engine`) — pure TypeScript, deterministic, emits an ordered event
+  list on every action. Its only output to a host is a `GameResult`.
+- **DOM board + one canvas FX overlay** (`src/ui`) — vanilla TS, driven by the engine's events.
+- **Headless CLI** (`pnpm play`) — ASCII board, tap/detonate REPL, `--moves` scripting, `--debug`
+  (reveal mines), `--auto` (the reference bot plays; `--n` for a quick win-rate sweep). Built for
+  driving and tuning the game without a browser.
+- **Balance harness** (`pnpm harness`) — playout bots over many seeds. A reasonable "greedy" bot and
+  an adversarial "blind-prober"; invariants are guarded in tests.
+- **Watch-demo** — the same reference bot plays the real UI hands-off, cycling boards.
+
+The game is a **standalone repo**, to be embedded in the Tower Run Tracker later as one consumer via
+`GameResult` — nothing in the engine knows about the host, Appwrite, or persistence.
+
+---
+
+## Balance status
+
+Current reference-bot win rate (headless, non-deducing, non-charging bot): **Easy ~81% · Standard
+~85% · Hard ~73%**; the blind-prober wins **0%** everywhere (tough tiles are shielded, so ignoring the
+mine economy leaves the board unclearable). A real player does better than the bot. These confirm the
+economy is solvent and that mines-as-the-key-resource holds up.
+
+## Open tuning questions
+
+These are empirical — answered by play and the CLI/harness, not by argument:
+
+- Base blast damage is high enough that a single blast clears any one tough tile. Does that make mines
+  feel powerful and satisfying, or does it make the charge/overlap mechanic irrelevant? (Alternative:
+  lower blast damage and guarantee two mines per tough tile — more strategic, more generation work.)
+- Is the Boss grind a satisfying end-game or a chore?
+- Is the hidden-HP-within-a-visible-class gamble fair once tough tiles are blast-only?
+- Are the per-difficulty mine densities and timers in the right place?
