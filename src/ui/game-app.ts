@@ -148,8 +148,9 @@ export class GameApp {
   // -- markup ------------------------------------------------------------
 
   private chrome(): string {
+    const label: Record<Difficulty, string> = { gentle: 'Easy', standard: 'Standard', hard: 'Hard' }
     const opts = (Object.keys(DIFFICULTIES) as Difficulty[])
-      .map(d => `<option value="${d}">${d[0]!.toUpperCase() + d.slice(1)}</option>`)
+      .map(d => `<option value="${d}">${label[d]}</option>`)
       .join('')
     return `
       <header class="ilm-header">
@@ -324,7 +325,9 @@ export class GameApp {
     const avail = outer - padX
     if (avail <= 0) return // not laid out yet
     const raw = (avail - (this.width - 1) * gap) / this.width
-    const size = Math.max(24, Math.min(44, Math.floor(raw)))
+    // Floor of 18px keeps a dense board (15 cols) inside a ~375px phone; pinch-zoom covers
+    // precision. Ceiling of 44px stops tiles ballooning on wide screens.
+    const size = Math.max(18, Math.min(44, Math.floor(raw)))
     this.root.style.setProperty('--tile-size', `${size}px`)
     // Hug the board: cap the card to the board's natural width so it doesn't leave dead
     // space on wide screens, while still shrinking to the viewport on narrow ones.

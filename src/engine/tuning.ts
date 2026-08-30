@@ -88,8 +88,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     scoreDifficultyMultiplier: 1,
   },
   standard: {
-    width: 12,
-    height: 12,
+    width: 11,
+    height: 11,
     mineDensity: 0.24,
     tierWeights: { common: 5, advanced: 3.5, elite: 2, fleet: 1, boss: 0 },
     hardGroundGradient: 0.55,
@@ -107,8 +107,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     scoreDifficultyMultiplier: 1.6,
   },
   hard: {
-    width: 16,
-    height: 16,
+    width: 15,
+    height: 15,
     mineDensity: 0.26,
     tierWeights: { common: 4, advanced: 3.5, elite: 2.5, fleet: 1.5, boss: 0 },
     hardGroundGradient: 0.7,
