@@ -112,14 +112,29 @@ function applyCommand(engine: MinesweeperEngine, cmd: string): string {
 function runAuto(diff: Difficulty, seed: string, spm: number): ReturnType<MinesweeperEngine['result']> {
   let t = 0
   const engine = createEngine({ difficulty: diff, seed, now: () => t })
+  let stuck = 0
+  let lastSig = ''
   for (let i = 0; i < 5000; i++) {
-    if (engine.snapshot().status !== 'playing') break
-    const action = autoPlay(engine.snapshot())
-    if (!action) break
-    if (action.type === 'reveal') engine.reveal(action.coord)
-    else engine.detonate(action.coord)
+    const snap = engine.snapshot()
+    if (snap.status !== 'playing') break
+    const action = autoPlay(snap)
+    if (action) {
+      if (action.type === 'reveal') engine.reveal(action.coord)
+      else engine.detonate(action.coord)
+    }
     t += spm
-    engine.tick(spm)
+    engine.tick(spm) // advance time even on a null move — lets charge regen
+    const s = engine.snapshot()
+    let cleared = 0
+    let crack10 = 0
+    for (const x of s.tiles) {
+      if (x.state === 'cleared' || x.state === 'detonated') cleared++
+      if (x.crack !== undefined) crack10 += Math.round(x.crack * 10)
+    }
+    const sig = `${cleared}|${crack10}|${s.playerCharge}`
+    stuck = sig === lastSig ? stuck + 1 : 0
+    lastSig = sig
+    if (stuck >= 30) break // genuinely stuck (no regen, no moves)
   }
   return engine.result()
 }

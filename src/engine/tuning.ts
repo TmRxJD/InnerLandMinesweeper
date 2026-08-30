@@ -48,6 +48,9 @@ export interface DifficultyConfig {
   readonly maxMineCharge: number
   /** Fraction of a detonated mine's charge that converts into the player pool. */
   readonly chargeConversion: number
+  /** Passive charge regenerated per second (Option 1: a second charge source so mines aren't
+   *  the only one). 0 = off. */
+  readonly chargeRegenPerSecond: number
   readonly scoreDifficultyMultiplier: number
 }
 
@@ -71,7 +74,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   gentle: {
     width: 9,
     height: 9,
-    mineCount: 18,
+    mineCount: 16,
     handTapDamage: 4,
     tierWeights: { common: 13, advanced: 4, elite: 1.6, fleet: 0.5, boss: 0 },
     hardGroundGradient: 0.16,
@@ -84,12 +87,13 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
+    chargeRegenPerSecond: 0.3,
     scoreDifficultyMultiplier: 1,
   },
   standard: {
     width: 11,
     height: 11,
-    mineCount: 28,
+    mineCount: 12,
     handTapDamage: 4,
     tierWeights: { common: 11, advanced: 4.5, elite: 2.2, fleet: 0.9, boss: 0 },
     hardGroundGradient: 0.2,
@@ -102,24 +106,26 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
+    chargeRegenPerSecond: 0.3,
     scoreDifficultyMultiplier: 1.6,
   },
   hard: {
     width: 15,
     height: 15,
-    mineCount: 50,
+    mineCount: 9,
     handTapDamage: 4,
     tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
     hardGroundGradient: 0.26,
     maxMineCharge: 7,
     bands: SHARED_BANDS,
-    timerSeconds: 600,
+    timerSeconds: 900,
     startingCharge: 12,
     maxPlayerCharge: 14,
     blastBaseDamage: 9,
     blastRadius: 2,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
+    chargeRegenPerSecond: 0.5,
     scoreDifficultyMultiplier: 2.4,
   },
 }

@@ -213,9 +213,10 @@ export class GameApp {
 
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--ground">3</span>
-            <div><b>Tap Commons.</b> Click a grey Common to clear it and reveal a number — how many
-              mines touch it, like classic Minesweeper. Tapping costs <b>charge</b> (capped, shown in
-              the HUD). Tougher enemies can't be tapped — see below.</div>
+            <div><b>Tap enemies.</b> Click a grey Common to clear it and reveal a number — how many
+              mines touch it, like classic Minesweeper. Tapping costs <b>charge</b>, which regenerates
+              over time up to a cap (shown in the HUD). Tough enemies can be tapped too, but only chip
+              slowly — see below.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${mineUrl}" alt="" class="ilm-help__sprite"></span>

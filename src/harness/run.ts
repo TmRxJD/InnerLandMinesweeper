@@ -21,15 +21,18 @@ const SECONDS_PER_MOVE = 2
 /** Hard cap on actions so a stuck bot can't spin forever. */
 const MAX_ACTIONS = 5000
 
-/** Board state that only changes when a move makes real headway (covered/armed/charge). */
+/** Board state that changes on any real headway: a clear, a chip (damage dealt), an arm, or
+ *  charge moving (e.g. regenerating while waiting). Chipping matters, so include crack sums. */
 function progressSig(snap: ReturnType<MinesweeperEngineSnapshot>): string {
-  let covered = 0
+  let cleared = 0
   let armed = 0
+  let crack10 = 0
   for (const t of snap.tiles) {
-    if (t.state === 'covered' || t.state === 'cracked') covered++
+    if (t.state === 'cleared' || t.state === 'detonated') cleared++
     else if (t.state === 'armed') armed++
+    if (t.crack !== undefined) crack10 += Math.round(t.crack * 10)
   }
-  return `${covered}|${armed}|${snap.playerCharge}`
+  return `${cleared}|${armed}|${crack10}|${snap.playerCharge}`
 }
 type MinesweeperEngineSnapshot = ReturnType<typeof createEngine>['snapshot']
 
@@ -42,9 +45,12 @@ export function runGame(difficulty: Difficulty, seed: string, bot: Bot): GameRes
     const snap = engine.snapshot()
     if (snap.status !== 'playing') break
     const action = bot.step(snap)
-    if (!action) break // bot has no productive move left — stuck; score the board as-is
-    if (action.type === 'reveal') engine.reveal(action.coord)
-    else engine.detonate(action.coord)
+    // A null action means "nothing to do right now" — often just waiting for charge to
+    // regen. Advance time either way; the no-progress guard below ends a truly stuck board.
+    if (action) {
+      if (action.type === 'reveal') engine.reveal(action.coord)
+      else engine.detonate(action.coord)
+    }
     t += SECONDS_PER_MOVE
     engine.tick(SECONDS_PER_MOVE)
     // No-progress guard: if several moves in a row change nothing (e.g. broke, probing

@@ -2,7 +2,7 @@
  * The concrete engine. Pure: no DOM, no framework, no wall-clock unless you let it.
  *
  * Charge is a damage currency. Tapping clears Commons (and grinds the Boss); tougher tiles
- * are shielded and only a mine blast reduces their HP. Detonating an armed mine converts its
+ * take slow hand-chips; a mine blast clears them fast. Detonating an armed mine converts its
  * charge into your (capped) pool.
  * Every mutating method returns the ordered events it produced. See docs/GAME_DESIGN.md.
  */
@@ -44,6 +44,7 @@ class Engine implements MinesweeperEngine {
   private moves = 0
   private detonations = 0
   private cracks = 0
+  private regenAccum = 0
   private maxChain = 0
   private tilesCleared = 0
   private readonly groundTotal: number
@@ -145,6 +146,15 @@ class Engine implements MinesweeperEngine {
   tick(deltaSeconds: number): EventList {
     if (this.status !== 'playing' || deltaSeconds <= 0) return []
     const events: GameEvent[] = []
+    // Option 1: passive charge regen. Accumulate fractional charge, apply whole units.
+    if (this.cfg.chargeRegenPerSecond > 0) {
+      this.regenAccum += deltaSeconds * this.cfg.chargeRegenPerSecond
+      const whole = Math.floor(this.regenAccum)
+      if (whole > 0) {
+        this.regenAccum -= whole
+        this.setPlayerCharge(this.playerCharge + whole, events)
+      }
+    }
     this.spendTime(deltaSeconds, events)
     return events
   }
