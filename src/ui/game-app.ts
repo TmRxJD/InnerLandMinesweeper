@@ -545,6 +545,10 @@ export class GameApp {
         `<span class="ilm-orb"><img class="ilm-mine-img" src="${mineUrl}" alt="" draggable="false">` +
         `<span class="ilm-orb__mult">${charge}×</span></span>`
       label = `armed Inner Land Mine, charge ${charge} times`
+    } else if (t.state === 'detonated') {
+      // A detonated mine leaves an empty crater — NOT a fresh enemy.
+      el.innerHTML = ''
+      label = 'detonated crater'
     } else {
       // covered or cracked — the enemy sprite is a mask filled with the class colour, with
       // a health bar shown from the start (full until you damage it).
