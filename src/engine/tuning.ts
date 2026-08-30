@@ -22,6 +22,7 @@ export interface DifficultyConfig {
   readonly tierWeights: Readonly<Record<Tier, number>>
   /** How strongly tough tiles cluster together (0 = uniform, 1 = maximally clumped). */
   readonly hardGroundGradient: number
+  /** HP band per enemy class, including the single centre `boss`. */
   readonly bands: Readonly<Record<Tier, TierBand>>
   /** Fixed timer budget in seconds. Generous by design; kills stalls, not thinking. */
   readonly timerSeconds: number
@@ -51,14 +52,16 @@ export interface DifficultyConfig {
 }
 
 /**
- * A clean clear costs the tile's hidden HP in player charge (1 charge per HP). The tier
- * is the *visible* band; the exact cost within it is hidden, and that gap is the risk.
+ * A clean clear costs the tile's hidden HP in player charge (1 charge per HP). The class is
+ * the *visible* band; the exact cost within it is hidden, and that gap is the risk. `boss`
+ * is far tougher than the ramp and only ever appears once, at board centre.
  */
 const SHARED_BANDS: Record<Tier, TierBand> = {
-  light: { minHp: 1, maxHp: 2 },
-  medium: { minHp: 2, maxHp: 4 },
-  heavy: { minHp: 4, maxHp: 6 },
-  elite: { minHp: 6, maxHp: 9 },
+  common: { minHp: 1, maxHp: 2 },
+  advanced: { minHp: 2, maxHp: 4 },
+  elite: { minHp: 4, maxHp: 6 },
+  fleet: { minHp: 6, maxHp: 9 },
+  boss: { minHp: 20, maxHp: 32 },
 }
 
 export const SCORE_CHAIN_WEIGHT = 25
@@ -69,7 +72,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 9,
     height: 9,
     mineDensity: 0.22,
-    tierWeights: { light: 6, medium: 3, heavy: 1.5, elite: 0.5 },
+    tierWeights: { common: 6, advanced: 3, elite: 1.5, fleet: 0.5, boss: 0 },
     hardGroundGradient: 0.4,
     bands: SHARED_BANDS,
     timerSeconds: 300,
@@ -88,7 +91,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 12,
     height: 12,
     mineDensity: 0.24,
-    tierWeights: { light: 5, medium: 3.5, heavy: 2, elite: 1 },
+    tierWeights: { common: 5, advanced: 3.5, elite: 2, fleet: 1, boss: 0 },
     hardGroundGradient: 0.55,
     bands: SHARED_BANDS,
     timerSeconds: 420,
@@ -107,7 +110,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 16,
     height: 16,
     mineDensity: 0.26,
-    tierWeights: { light: 4, medium: 3.5, heavy: 2.5, elite: 1.5 },
+    tierWeights: { common: 4, advanced: 3.5, elite: 2.5, fleet: 1.5, boss: 0 },
     hardGroundGradient: 0.7,
     bands: SHARED_BANDS,
     timerSeconds: 600,

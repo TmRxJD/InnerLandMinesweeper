@@ -16,7 +16,9 @@ export interface AutoAction {
   readonly coord: Coord
 }
 
-const TIER_COST: Record<Tier, number> = { light: 1, medium: 3, heavy: 5, elite: 7 }
+// Rough per-class cost the bot sorts by (real cost is the hidden HP). Boss is huge so the
+// bot leaves it for last and prefers detonating mines near it.
+const TIER_COST: Record<Tier, number> = { common: 1, advanced: 3, elite: 5, fleet: 7, boss: 40 }
 
 function actionable(snap: BoardSnapshot): TileView[] {
   return snap.tiles.filter(t => t.state === 'covered' || t.state === 'cracked')

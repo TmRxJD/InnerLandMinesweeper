@@ -12,8 +12,16 @@
 // Primitives
 // ---------------------------------------------------------------------------
 
-/** A tile's visible toughness band. The exact HP is hidden; only the tier is shown. */
-export type Tier = 'light' | 'medium' | 'heavy' | 'elite'
+/**
+ * A tile's visible enemy class (The Tower's real enemy categories). The exact HP is hidden;
+ * only the class is shown. common → advanced → elite → fleet ramp in toughness; `boss` is a
+ * single, far tougher tile pinned to the board centre.
+ *   common:   Basic, Fast, Tank
+ *   advanced: Ranged, Protector
+ *   elite:    Vampire, Ray, Scatter
+ *   fleet:    Saboteur, Commander, Overcharge
+ */
+export type Tier = 'common' | 'advanced' | 'elite' | 'fleet' | 'boss'
 
 /** Zero-based grid coordinate. */
 export interface Coord {

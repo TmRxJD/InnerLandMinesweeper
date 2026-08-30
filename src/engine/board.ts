@@ -8,7 +8,8 @@ import type { Coord, Tier, TileState } from './types'
 import type { DifficultyConfig } from './tuning'
 import { Rng } from './rng'
 
-const TIER_ORDER: readonly Tier[] = ['light', 'medium', 'heavy', 'elite']
+// The toughness ramp for random ground. `boss` is excluded — it is placed once, at centre.
+const TIER_ORDER: readonly Tier[] = ['common', 'advanced', 'elite', 'fleet']
 
 export interface Tile {
   readonly x: number
@@ -112,7 +113,7 @@ function upgradeTier(tier: Tier, steps: number): Tier {
 
 /**
  * Generate a board. Guarantees:
- *  - the opening cell is Light with zero adjacent mines (a free opening cascade),
+ *  - the opening cell is Common with zero adjacent mines (a free opening cascade),
  *  - mines never sit in the opening's 8-neighbourhood (so its count is genuinely 0),
  *  - tough tiles cluster via a smooth hardness field scaled by `hardGroundGradient`.
  */
@@ -121,13 +122,20 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
   const { width, height } = cfg
   const total = width * height
 
-  // Opening: an interior cell so its full neighbourhood exists on-board.
-  const opening: Coord = {
-    x: rng.int(1, Math.max(1, width - 2)),
-    y: rng.int(1, Math.max(1, height - 2)),
+  // The boss is pinned to the exact board centre and is never a mine.
+  const boss: Coord = { x: Math.floor(width / 2), y: Math.floor(height / 2) }
+  const bossIdx = idx(width, boss.x, boss.y)
+
+  // Opening: an interior cell so its full neighbourhood exists on-board — and never the
+  // boss cell, which must stay a tough ground tile to clear.
+  let opening: Coord = { x: rng.int(1, Math.max(1, width - 2)), y: rng.int(1, Math.max(1, height - 2)) }
+  let guard = 0
+  while (idx(width, opening.x, opening.y) === bossIdx && guard++ < 16) {
+    opening = { x: rng.int(1, Math.max(1, width - 2)), y: rng.int(1, Math.max(1, height - 2)) }
   }
 
   const reserved = new Set<number>()
+  reserved.add(bossIdx) // no mine on the boss
   reserved.add(idx(width, opening.x, opening.y))
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
@@ -181,14 +189,21 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
     }
   }
 
-  // Force the opening tile to Light regardless of what it rolled.
+  // Force the opening tile to Common so its free cascade actually flows.
   const openTile = tiles[idx(width, opening.x, opening.y)]!
-  if (openTile.tier !== 'light') {
-    const band = cfg.bands.light
-    ;(openTile as { tier: Tier }).tier = 'light'
+  if (openTile.tier !== 'common') {
+    const band = cfg.bands.common
+    ;(openTile as { tier: Tier }).tier = 'common'
     openTile.hp = rng.int(band.minHp, band.maxHp)
     ;(openTile as { maxHp: number }).maxHp = openTile.hp
   }
+
+  // Pin the boss: a single, far tougher ground tile at centre — the end-game problem.
+  const bossTile = tiles[bossIdx]!
+  const bossBand = cfg.bands.boss
+  ;(bossTile as { tier: Tier }).tier = 'boss'
+  bossTile.hp = rng.int(bossBand.minHp, bossBand.maxHp)
+  ;(bossTile as { maxHp: number }).maxHp = bossTile.hp
 
   // Adjacency counts for ground tiles.
   const board: Board = { width, height, tiles, opening, mineCount: mineCells.size }

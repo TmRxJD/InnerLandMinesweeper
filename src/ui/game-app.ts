@@ -18,8 +18,47 @@ import { autoPlay } from '../engine/auto-player'
 import type { BoardSnapshot, Coord, Difficulty, EventList, GameResult, MinesweeperEngine, Tier, TileView } from '../engine/types'
 import { FxLayer } from './fx-layer'
 
-const TIER_MIN_COST: Record<Tier, number> = { light: 1, medium: 2, heavy: 4, elite: 6 }
-const PIP_COUNT: Record<Tier, number> = { light: 1, medium: 2, heavy: 3, elite: 4 }
+// Real Tower enemy sprites (from @tmrxjd/tower-assets), grouped into the game's tiers.
+import mineUrl from './assets/mine.webp'
+import enemyBasic from './assets/enemy-basic.webp'
+import enemyFast from './assets/enemy-fast.webp'
+import enemyTank from './assets/enemy-tank.webp'
+import enemyRanged from './assets/enemy-ranged.webp'
+import enemyProtector from './assets/enemy-protector.webp'
+import enemyVampire from './assets/enemy-vampire.webp'
+import enemyRay from './assets/enemy-ray.webp'
+import enemyScatter from './assets/enemy-scatter.webp'
+import enemySaboteur from './assets/enemy-saboteur.webp'
+import enemyCommander from './assets/enemy-commander.webp'
+import enemyOvercharge from './assets/enemy-overcharge.webp'
+import enemyBoss from './assets/enemy-boss.webp'
+
+/** Each tier maps to the real enemy category's members; a tile picks one deterministically. */
+const ENEMY_SETS: Record<Tier, readonly string[]> = {
+  common: [enemyBasic, enemyFast, enemyTank],
+  advanced: [enemyRanged, enemyProtector],
+  elite: [enemyVampire, enemyRay, enemyScatter],
+  fleet: [enemySaboteur, enemyCommander, enemyOvercharge],
+  boss: [enemyBoss],
+}
+
+const TIER_MIN_COST: Record<Tier, number> = { common: 1, advanced: 2, elite: 4, fleet: 6, boss: 18 }
+const TIER_LABEL: Record<Tier, string> = {
+  common: 'Common', advanced: 'Advanced', elite: 'Elite', fleet: 'Fleet', boss: 'Boss',
+}
+
+/** Stable per-tile sprite pick from a tier's set (deterministic in board coords). */
+function spriteFor(tier: Tier, x: number, y: number): string {
+  const set = ENEMY_SETS[tier]
+  const h = (x * 73856093) ^ (y * 19349663)
+  return set[Math.abs(h) % set.length]!
+}
+
+/** Charge → orb ring colour. Ramps cool→hot so a rising mine is unmistakable. */
+function chargeColor(charge: number): string {
+  const stops = ['#35e0ff', '#46c56a', '#ffd23f', '#ff9f45', '#ff5b6e']
+  return stops[Math.min(stops.length - 1, Math.max(0, charge - 1))]!
+}
 
 export interface GameAppOptions {
   difficulty?: Difficulty
@@ -63,6 +102,7 @@ export class GameApp {
   private demo = false
   private demoTimers: ReturnType<typeof setTimeout>[] = []
   private cursor!: HTMLElement
+  private hintsOn = false
 
   private readonly onResult: ((r: GameResult) => void) | undefined
 
@@ -134,6 +174,7 @@ export class GameApp {
         </div>
         <div class="ilm-controls">
           <select class="ilm-select" data-difficulty aria-label="Difficulty">${opts}</select>
+          <button class="ilm-btn" data-hints aria-pressed="false">Hints</button>
           <button class="ilm-btn" data-demo>Watch demo</button>
           <button class="ilm-btn" data-new>New board</button>
         </div>
@@ -153,16 +194,6 @@ export class GameApp {
             <button class="ilm-btn ilm-btn--primary" data-again>Play again</button>
           </div>
         </div>
-      </div>
-
-      <div class="ilm-legend" aria-hidden="true">
-        <span class="ilm-legend__group">
-          <span class="ilm-legend__swatch" data-tier="light"></span>Light
-          <span class="ilm-legend__swatch" data-tier="medium"></span>Medium
-          <span class="ilm-legend__swatch" data-tier="heavy"></span>Heavy
-          <span class="ilm-legend__swatch" data-tier="elite"></span>Elite
-        </span>
-        <span class="ilm-legend__hint">tougher = more charge to clear</span>
       </div>
 
       ${this.helpMarkup()}
@@ -185,15 +216,22 @@ export class GameApp {
               <b>charge</b>.</div>
           </div>
           <div class="ilm-help__row">
-            <span class="ilm-help__icon ilm-help__icon--orb"></span>
+            <span class="ilm-help__icon"><img src="${mineUrl}" alt="" class="ilm-help__sprite"></span>
             <div><b>Find a mine → it arms.</b> A mine you click doesn't kill you — it uncovers as a
-              glowing orb. <b>Click the orb to detonate it:</b> it blasts a hole in the board and
-              refills your charge.</div>
+              glowing <b>Inner Land Mine</b>. <b>Click it to detonate:</b> it blasts a hole in the
+              board and refills your charge. Its ring brightens and shifts colour as its charge grows.</div>
           </div>
           <div class="ilm-help__row">
-            <span class="ilm-help__icon ilm-help__icon--tiers"></span>
-            <div><b>Tiers show toughness.</b> Light → Elite is how much charge a tile costs to clear.
-              The exact cost is hidden inside the band — that's the risk.</div>
+            <span class="ilm-help__icon"><img src="${enemyVampire}" alt="" class="ilm-help__sprite"></span>
+            <div><b>Enemies show toughness.</b> Common → Advanced → Elite → Fleet is how much charge a
+              tile costs to clear; the exact cost is hidden inside the class — that's the risk. Each
+              tile is a real Tower enemy: Common (Basic/Fast/Tank), Advanced (Ranged/Protector),
+              Elite (Vampire/Ray/Scatter), Fleet (Saboteur/Commander/Overcharge).</div>
+          </div>
+          <div class="ilm-help__row">
+            <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
+            <div><b>The Boss</b> sits at the centre — far tougher than anything else. You'll chip it
+              down or blast it repeatedly to finish the board.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--crack"></span>
@@ -206,7 +244,8 @@ export class GameApp {
               take your time and deduce.</div>
           </div>
 
-          <p class="ilm-help__keys">Keyboard: arrow keys move · Enter / Space acts on the focused tile.</p>
+          <p class="ilm-help__keys">Keyboard: arrow keys move · Enter / Space acts on the focused
+            tile. Toggle <b>Hints</b> for a live nudge on what to do next.</p>
           <button class="ilm-btn ilm-btn--primary ilm-help__got" data-help-close>Got it</button>
         </div>
       </div>
@@ -220,6 +259,7 @@ export class GameApp {
     this.root.querySelector('[data-new]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
     this.root.querySelector('[data-again]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
     this.root.querySelector('[data-demo]')!.addEventListener('click', () => this.toggleDemo())
+    this.root.querySelector('[data-hints]')!.addEventListener('click', () => this.toggleHints())
     this.root.querySelector('[data-help]')!.addEventListener('click', () => this.openHelp())
     this.root.querySelectorAll('[data-help-close]').forEach(el => {
       el.addEventListener('click', () => this.closeHelp())
@@ -229,6 +269,15 @@ export class GameApp {
     })
     this.board.addEventListener('keydown', e => this.onKey(e as KeyboardEvent))
     document.addEventListener('keydown', this.onGlobalKey)
+  }
+
+  private toggleHints(): void {
+    this.hintsOn = !this.hintsOn
+    this.root.classList.toggle('hints-on', this.hintsOn)
+    const btn = this.root.querySelector<HTMLButtonElement>('[data-hints]')!
+    btn.classList.toggle('is-active', this.hintsOn)
+    btn.setAttribute('aria-pressed', String(this.hintsOn))
+    this.updateCoach(this.engine.snapshot())
   }
 
   private openHelp(): void {
@@ -297,9 +346,6 @@ export class GameApp {
       btn.dataset.i = String(i)
       btn.setAttribute('role', 'gridcell')
       btn.tabIndex = i === 0 ? 0 : -1
-      const pips = document.createElement('span')
-      pips.className = 'ilm-pips'
-      btn.appendChild(pips)
       btn.addEventListener('click', () => this.onTileClick(t.coord))
       this.board.appendChild(btn)
       return btn
@@ -323,7 +369,9 @@ export class GameApp {
 
     // Catastrophic-click confirm: tough ground the player visibly cannot afford.
     const snap = this.engine.snapshot()
-    const unaffordable = TIER_MIN_COST[tile.tier] > snap.playerCharge && (tile.tier === 'heavy' || tile.tier === 'elite')
+    const unaffordable =
+      TIER_MIN_COST[tile.tier] > snap.playerCharge &&
+      (tile.tier === 'elite' || tile.tier === 'fleet' || tile.tier === 'boss')
     if (unaffordable && !this.sameCoord(this.confirmCoord, coord)) {
       this.setConfirm(coord)
       return
@@ -383,9 +431,14 @@ export class GameApp {
       switch (e.kind) {
         case 'mineDetonated':
           this.fx.detonation(e.coord.x, e.coord.y, e.damage)
+          // Flash every tile the blast touched so the affected area is unmistakable.
+          this.pulseTile(e.coord, 'blast-origin')
+          for (const c of e.radius) this.pulseTile(c, 'blast-hit')
           break
         case 'mineChargeChanged':
+          // A mine's charge went up: spark it and flash it in its new charge colour.
           this.fx.chargeSpark(e.coord.x, e.coord.y)
+          this.flashChargeUp(e.coord, e.to)
           break
         case 'gameWon':
         case 'gameLost':
@@ -394,6 +447,23 @@ export class GameApp {
       }
     }
     this.render(this.engine.snapshot())
+  }
+
+  /** Add a one-shot animation class to a tile, self-removing so it can re-trigger. */
+  private pulseTile(coord: Coord, cls: string): void {
+    const el = this.tiles[this.indexOf(coord)]
+    if (!el) return
+    el.classList.remove(cls)
+    void el.offsetWidth // reflow so re-adding restarts the animation
+    el.classList.add(cls)
+    globalThis.setTimeout(() => el.classList.remove(cls), 520)
+  }
+
+  private flashChargeUp(coord: Coord, charge: number): void {
+    const el = this.tiles[this.indexOf(coord)]
+    if (!el) return
+    el.style.setProperty('--charge-color', chargeColor(charge))
+    this.pulseTile(coord, 'charge-up')
   }
 
   private render(snap: BoardSnapshot): void {
@@ -439,25 +509,32 @@ export class GameApp {
     el.className = 'ilm-tile'
     el.classList.add(`is-${t.state === 'detonated' ? 'destroyed' : t.state}`)
 
-    let label = `${t.tier} tile`
+    const cls = TIER_LABEL[t.tier]
+    let label = `${cls} enemy`
     if (t.state === 'cleared') {
       if (t.number === undefined) {
         el.classList.add('is-destroyed')
-        el.textContent = ''
+        el.innerHTML = ''
         label = 'cleared crater'
       } else {
         el.dataset.n = String(t.number)
-        el.textContent = t.number === 0 ? '' : String(t.number)
+        el.innerHTML = `<span class="ilm-num">${t.number === 0 ? '' : t.number}</span>`
         label = t.number === 0 ? 'cleared, no adjacent mines' : `cleared, ${t.number} adjacent`
       }
     } else if (t.state === 'armed') {
-      el.innerHTML = `<span class="ilm-orb" style="--charge:${Math.min(1, (t.mineCharge ?? 1) / 6)}"><span class="ilm-orb__mult">${t.mineCharge ?? 1}×</span></span>`
-      label = `armed mine, charge ${t.mineCharge ?? 1} times`
+      // The Inner Land Mine sprite with a charge ring whose colour ramps with charge.
+      const charge = t.mineCharge ?? 1
+      el.style.setProperty('--charge', String(Math.min(1, charge / 6)))
+      el.style.setProperty('--charge-color', chargeColor(charge))
+      el.innerHTML =
+        `<span class="ilm-orb"><img class="ilm-mine-img" src="${mineUrl}" alt="" draggable="false">` +
+        `<span class="ilm-orb__mult">${charge}×</span></span>`
+      label = `armed Inner Land Mine, charge ${charge} times`
     } else {
-      // covered or cracked — restore pips, set crack severity
+      // covered or cracked — show the real enemy sprite; crack overlay scales with severity.
       if (t.crack !== undefined) el.style.setProperty('--crack', String(t.crack))
-      el.innerHTML = `<span class="ilm-pips">${'<span class="ilm-pip"></span>'.repeat(PIP_COUNT[t.tier])}</span>`
-      label = t.state === 'cracked' ? `${t.tier} tile, cracked` : `${t.tier} tile, covered`
+      el.innerHTML = `<img class="ilm-enemy" src="${spriteFor(t.tier, t.coord.x, t.coord.y)}" alt="" draggable="false">`
+      label = t.state === 'cracked' ? `${cls} enemy, cracked` : `${cls} enemy`
     }
     el.setAttribute('aria-label', label)
     // Preserve roving tabindex.

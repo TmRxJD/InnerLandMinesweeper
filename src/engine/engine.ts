@@ -110,7 +110,7 @@ class Engine implements MinesweeperEngine {
     })
 
     // 3. Removing the mine decrements neighbours' live counts; any cleared number that
-    //    hits zero unzips a free Light cascade.
+    //    hits zero unzips a free Common cascade.
     chainCleared += this.decrementAround(tile, events)
 
     // 4. Apply blast damage. Track which ground cells this blast *cleared* — overlap
@@ -240,8 +240,8 @@ class Engine implements MinesweeperEngine {
   // -- cascades ------------------------------------------------------------
 
   /**
-   * Free, Light-only flood from a just-cleared zero-adjacent tile. Reveals covered Light
-   * ground neighbours; continues only through Light tiles that are themselves zero.
+   * Free, Common-only flood from a just-cleared zero-adjacent tile. Reveals covered Common
+   * ground neighbours; continues only through Common tiles that are themselves zero.
    * Returns the number of tiles cleared by the cascade.
    */
   private cascadeFrom(origin: Tile, events: GameEvent[]): number {
@@ -254,7 +254,7 @@ class Engine implements MinesweeperEngine {
       for (const n of neighbours(this.board, tile.x, tile.y)) {
         if (seen.has(n)) continue
         if (n.isMine) continue
-        if (n.tier !== 'light') continue
+        if (n.tier !== 'common') continue
         if (n.state === 'cleared') continue
         seen.add(n)
         n.state = 'cleared'

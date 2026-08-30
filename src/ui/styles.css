@@ -202,42 +202,16 @@
 }
 .ilm-btn--primary:hover { border-color: var(--energy); }
 
-/* ---- Coach line (live "what to do" hint) ----------------------------- */
+/* ---- Coach line (live "what to do" hint, off unless Hints is toggled) ---- */
 
-.ilm-coach {
+.ilm-coach { display: none; }
+.ilm-root.hints-on .ilm-coach {
+  display: block;
   min-height: 18px;
   font-size: 13px;
-  color: var(--ink-dim);
+  color: var(--energy);
   padding-left: 2px;
 }
-
-/* ---- Legend (tier key) ----------------------------------------------- */
-
-.ilm-legend {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px 16px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--ink-dim);
-  padding-top: 2px;
-}
-.ilm-legend__group { display: flex; align-items: center; gap: 6px; }
-.ilm-legend__swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  background: var(--tile-raised);
-  flex: none;
-  margin-left: 8px;
-}
-.ilm-legend__group > .ilm-legend__swatch:first-child { margin-left: 0; }
-.ilm-legend__swatch[data-tier='light']  { border-top: 3px solid var(--tier-light); }
-.ilm-legend__swatch[data-tier='medium'] { border-top: 4px solid var(--tier-medium); }
-.ilm-legend__swatch[data-tier='heavy']  { border-top: 5px solid var(--tier-heavy); }
-.ilm-legend__swatch[data-tier='elite']  { border-top: 6px solid var(--tier-elite); }
-.ilm-legend__hint { opacity: 0.8; font-style: italic; }
 
 /* ---- Help dialog ----------------------------------------------------- */
 
@@ -291,17 +265,7 @@
   border: 1px solid var(--tile-edge);
 }
 .ilm-help__icon--ground { color: var(--n3); }
-.ilm-help__icon--orb {
-  border-color: var(--energy-dim);
-  background: radial-gradient(circle at 50% 45%, #16323d, #0b1622);
-}
-.ilm-help__icon--orb::after {
-  content: '';
-  width: 16px; height: 16px; border-radius: 50%;
-  background: radial-gradient(circle, #eaffff, var(--energy) 60%, #0b1622 100%);
-  box-shadow: 0 0 8px var(--energy);
-}
-.ilm-help__icon--tiers { background: linear-gradient(90deg, var(--tier-light), var(--tier-medium), var(--tier-heavy), var(--tier-elite)); }
+.ilm-help__sprite { width: 24px; height: 24px; object-fit: contain; }
 .ilm-help__icon--crack { color: var(--danger); background-image: linear-gradient(45deg, transparent 44%, rgba(255,91,110,0.6) 46%, transparent 50%); }
 .ilm-help__icon--flag { color: var(--energy); }
 .ilm-help__keys { margin: 16px 0 18px; font-size: 12px; color: var(--ink-dim); }
@@ -365,38 +329,36 @@
 .ilm-tile:focus-visible { outline: 2px solid var(--energy); outline-offset: 2px; z-index: 6; }
 .ilm-tile:hover:not(.is-cleared):not(.is-destroyed) { transform: translateY(-1px); }
 
-/* Covered tiles carry the tier as a coloured top edge (thickness = tier) plus corner pips. */
+/* Covered/cracked tiles show the real Tower enemy sprite. The distinct silhouette + colour
+   of each enemy IS the class cue — no coloured bar or pips needed. */
 .ilm-tile.is-covered,
 .ilm-tile.is-cracked {
   background: linear-gradient(180deg, var(--tile-raised), var(--tile));
 }
-.ilm-tile[data-tier='light']  { border-top: 3px solid var(--tier-light); }
-.ilm-tile[data-tier='medium'] { border-top: 5px solid var(--tier-medium); }
-.ilm-tile[data-tier='heavy']  { border-top: 7px solid var(--tier-heavy); }
-.ilm-tile[data-tier='elite']  { border-top: 9px solid var(--tier-elite); }
-
-/* Redundant, non-colour tier cue: 1–4 pips bottom-right. */
-.ilm-pips {
-  position: absolute;
-  right: 4px;
-  bottom: 3px;
-  display: flex;
-  gap: 2px;
+.ilm-enemy {
+  width: 78%;
+  height: 78%;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.5));
 }
-.ilm-tile.is-cleared .ilm-pips,
-.ilm-tile.is-destroyed .ilm-pips,
-.ilm-tile.is-armed .ilm-pips { display: none; }
-.ilm-pip {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.85;
+/* The boss is bigger and menacing. */
+.ilm-tile[data-tier='boss'] {
+  background: radial-gradient(circle at 50% 45%, #2a0f1f, #120a14);
+  border-color: var(--tier-elite);
+  z-index: 2;
 }
-.ilm-tile[data-tier='light']  .ilm-pips { color: var(--tier-light); }
-.ilm-tile[data-tier='medium'] .ilm-pips { color: var(--tier-medium); }
-.ilm-tile[data-tier='heavy']  .ilm-pips { color: var(--tier-heavy); }
-.ilm-tile[data-tier='elite']  .ilm-pips { color: var(--tier-elite); }
+.ilm-tile[data-tier='boss'] .ilm-enemy {
+  width: 94%;
+  height: 94%;
+  filter: drop-shadow(0 0 6px var(--danger));
+  animation: ilm-boss 2.4s ease-in-out infinite;
+}
+.reduce-motion .ilm-tile[data-tier='boss'] .ilm-enemy { animation: none; }
+@keyframes ilm-boss {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px var(--danger)); }
+  50% { transform: scale(1.06); filter: drop-shadow(0 0 12px var(--danger)); }
+}
 
 /* Cleared ground: recessed, shows a number. */
 .ilm-tile.is-cleared {
@@ -425,44 +387,78 @@
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.7);
 }
 
-/* Armed mine: a live chrono orb with a charge ring (conic-gradient by --charge). */
+/* Armed mine: the Inner Land Mine sprite inside a charge ring. The ring's fill grows with
+   --charge and its colour (--charge-color) ramps cool→hot as the mine gains charge. */
 .ilm-tile.is-armed {
   background: radial-gradient(circle at 50% 45%, #16323d, #0b1622);
-  border-color: var(--energy-dim);
+  border-color: var(--charge-color, var(--energy-dim));
   cursor: pointer;
 }
 .ilm-orb {
   position: relative;
-  width: 66%;
-  height: 66%;
+  width: 84%;
+  height: 84%;
   border-radius: 50%;
   background:
-    conic-gradient(var(--energy) calc(var(--charge, 0) * 1turn), rgba(53, 224, 255, 0.12) 0);
+    conic-gradient(var(--charge-color, var(--energy)) calc(var(--charge, 0) * 1turn),
+      rgba(255, 255, 255, 0.1) 0);
   display: grid;
   place-items: center;
+  padding: 2px;
   animation: ilm-pulse 1.8s ease-in-out infinite;
+  --pulse-color: var(--charge-color, var(--energy));
 }
 .reduce-motion .ilm-orb { animation: none; }
-.ilm-orb::after {
-  content: '';
-  width: 58%;
-  height: 58%;
+.ilm-mine-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   border-radius: 50%;
-  background: radial-gradient(circle, #eaffff, var(--energy) 60%, #0b1622 100%);
-  box-shadow: 0 0 10px var(--energy);
+  background: #0b1622;
+  filter: drop-shadow(0 0 4px var(--charge-color, var(--energy)));
+  pointer-events: none;
 }
 .ilm-orb__mult {
   position: absolute;
-  font-size: 10px;
+  right: -2px;
+  bottom: -2px;
+  font-size: 9px;
   font-weight: 800;
   color: #041016;
-  z-index: 1;
+  background: var(--charge-color, var(--energy));
+  border-radius: 6px;
+  padding: 0 3px;
+  z-index: 2;
 }
 
 @keyframes ilm-pulse {
-  0%, 100% { box-shadow: 0 0 6px var(--energy-dim); }
-  50% { box-shadow: 0 0 16px var(--energy); }
+  0%, 100% { box-shadow: 0 0 5px color-mix(in srgb, var(--pulse-color) 50%, transparent); }
+  50% { box-shadow: 0 0 16px var(--pulse-color); }
 }
+
+/* Blast feedback: the detonated tile and everything in its radius flash so the affected
+   area is unmistakable. */
+@keyframes ilm-blast-hit {
+  0% { box-shadow: 0 0 0 0 rgba(53, 224, 255, 0.9); background-color: rgba(53, 224, 255, 0.35); }
+  100% { box-shadow: 0 0 0 6px rgba(53, 224, 255, 0); background-color: transparent; }
+}
+@keyframes ilm-blast-origin {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.95); }
+  100% { box-shadow: 0 0 0 10px rgba(255, 91, 110, 0); }
+}
+.ilm-tile.blast-hit { animation: ilm-blast-hit 500ms ease-out; }
+.ilm-tile.blast-origin { animation: ilm-blast-origin 500ms ease-out; z-index: 7; }
+.reduce-motion .ilm-tile.blast-hit,
+.reduce-motion .ilm-tile.blast-origin { animation: none; }
+
+/* Charge-up: a quick pop + coloured glow when a mine's charge increases. */
+@keyframes ilm-charge-up {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.ilm-tile.charge-up .ilm-orb { animation: ilm-charge-up 420ms ease-out; }
+.reduce-motion .ilm-tile.charge-up .ilm-orb { animation: none; }
 
 /* Cracked: covered tile with a fracture overlay; severity via --crack. */
 .ilm-tile.is-cracked::before {

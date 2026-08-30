@@ -33,11 +33,11 @@ describe('determinism', () => {
 })
 
 describe('opening guarantee', () => {
-  it('the opening is Light, zero-adjacent, and not a mine', () => {
+  it('the opening is Common, zero-adjacent, and not a mine', () => {
     const board = truth('open-seed')
     const o = tileAt(board, board.opening.x, board.opening.y)!
     expect(o.isMine).toBe(false)
-    expect(o.tier).toBe('light')
+    expect(o.tier).toBe('common')
     expect(o.adjacent).toBe(0)
   })
 
@@ -49,12 +49,29 @@ describe('opening guarantee', () => {
     const events = engine.reveal(board.opening)
     const cleared = events.filter(e => e.kind === 'tileCleared')
     expect(cleared.length).toBeGreaterThan(1) // opening + at least one cascade tile
-    // The opening click pays its own (trivial, Light) HP; every cascade tile is free.
+    // The opening click pays its own (trivial, Common) HP; every cascade tile is free.
     const cascadeTiles = cleared.filter(e => e.kind === 'tileCleared' && e.cascadeDistance > 0)
     expect(cascadeTiles.length).toBeGreaterThan(0)
     expect(cascadeTiles.every(e => e.kind === 'tileCleared' && e.chargeSpent === 0)).toBe(true)
     const openingHp = tileAt(board, board.opening.x, board.opening.y)!.maxHp
     expect(engine.snapshot().playerCharge).toBe(before - openingHp) // only the origin cost charge
+  })
+})
+
+describe('boss', () => {
+  it('is a single tough non-mine tile pinned to the board centre', () => {
+    const board = truth('boss-seed')
+    const cx = Math.floor(cfg.width / 2)
+    const cy = Math.floor(cfg.height / 2)
+    const center = tileAt(board, cx, cy)!
+    expect(center.tier).toBe('boss')
+    expect(center.isMine).toBe(false)
+    expect(center.maxHp).toBeGreaterThanOrEqual(cfg.bands.boss.minHp)
+    // Exactly one boss on the board.
+    expect(board.tiles.filter(t => t.tier === 'boss')).toHaveLength(1)
+    // Far tougher than any ramp tile.
+    const rampMax = Math.max(...board.tiles.filter(t => t.tier !== 'boss').map(t => t.maxHp))
+    expect(center.maxHp).toBeGreaterThan(rampMax)
   })
 })
 
