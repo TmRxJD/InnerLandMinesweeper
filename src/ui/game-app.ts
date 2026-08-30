@@ -5,7 +5,7 @@
  * game rules.
  *
  * Input: tap a Common to clear it or a hidden mine to arm it; click a glowing armed mine to
- * detonate it. Tapping a tough (shielded) tile just bumps — only blasts clear those.
+ * detonate it. Tapping a tough tile chips it slowly; a blast clears it fast.
  * Keyboard mirrors taps with a roving tabindex + Enter/Space.
  */
 
@@ -231,9 +231,9 @@ export class GameApp {
               <b style="color:var(--enemy-common)">Common (grey)</b> is the only kind you can tap to
               kill. <b style="color:var(--enemy-advanced)">Advanced (yellow)</b>,
               <b style="color:var(--enemy-elite)">Elite (blue)</b> and
-              <b style="color:var(--enemy-fleet)">Fleet (red)</b> are <b>shielded</b> — tapping them
-              does nothing; only a <b>mine blast</b> reduces their HP. Their health bar shows the
-              damage.</div>
+              <b style="color:var(--enemy-fleet)">Fleet (red)</b> can be tapped too, but each tap
+              only chips a sliver of their HP — a <b>mine blast</b> clears them far faster. Their
+              health bar shows the damage.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
@@ -367,8 +367,8 @@ export class GameApp {
       return
     }
     if (tile.state !== 'covered' && tile.state !== 'cracked') return
-    // Tapping a tough (non-Common, non-Boss) tile is shielded by the engine and just bumps;
-    // Commons and the Boss are worked by hand. No confirm needed.
+    // Tapping a tough tile chips it slowly (engine caps hand-tap damage); a blast is faster.
+
     this.apply(this.engine.reveal(coord))
   }
 
@@ -419,10 +419,6 @@ export class GameApp {
           // A mine's charge went up: spark it and flash it in its new charge colour.
           this.fx.chargeSpark(e.coord.x, e.coord.y)
           this.flashChargeUp(e.coord, e.to)
-          break
-        case 'tileShielded':
-          // Tapped a tough tile that can't be cleared by hand — nudge it red.
-          this.pulseTile(e.coord, 'shielded-bump')
           break
         case 'gameWon':
         case 'gameLost':
@@ -478,7 +474,7 @@ export class GameApp {
     if (!cleared && !armed) {
       msg = 'Tap grey Commons to clear them and reveal numbers. A mine arms as a glowing orb.'
     } else if (armed) {
-      msg = 'Click a glowing mine to detonate it — the blast is the only way to clear tough enemies.'
+      msg = 'Click a glowing mine to detonate it — a blast clears tough enemies far faster than tapping.'
     } else {
       msg = 'Tap Commons to clear; tougher enemies (yellow/blue/red) need a mine blast to kill.'
     }

@@ -125,26 +125,26 @@ describe('clean clear costs the hidden HP', () => {
 })
 
 describe('tapping tiles', () => {
-  it('only Common (and Boss) tiles can be tapped; tougher tiles are shielded', () => {
-    const seed = 'shield-seed'
+  it('a hand-tap removes at most handTapDamage HP, so tough tiles chip slowly', () => {
+    const seed = 'chip-seed'
     const board = truth(seed)
-    const engine = createEngine({ difficulty: DIFF, seed, now: () => 0 })
-    // A tough (Advanced/Elite/Fleet) ground tile that isn't a mine or the opening.
-    const tough = board.tiles.find(
-      t => !t.isMine && (t.tier === 'advanced' || t.tier === 'elite' || t.tier === 'fleet'),
-    )
+    // A Fleet ground tile (HP 6–9, well above handTapDamage) that isn't a mine.
+    const tough = board.tiles.find(t => !t.isMine && t.tier === 'fleet')
     expect(tough).toBeDefined()
-    const before = engine.snapshot()
+    const engine = createEngine({ difficulty: DIFF, seed, now: () => 0 })
+    const startHp = tough!.maxHp
+    const chargeBefore = engine.snapshot().playerCharge
     const events = engine.reveal({ x: tough!.x, y: tough!.y })
-    expect(events.some(e => e.kind === 'tileShielded')).toBe(true)
-    // No state change, no charge spent — a mine blast is the only thing that damages it.
+    expect(events.some(e => e.kind === 'tileCracked')).toBe(true) // dented, not cleared
     const view = engine.snapshot().tiles.find(v => v.coord.x === tough!.x && v.coord.y === tough!.y)!
-    expect(view.state).toBe('covered')
-    expect(engine.snapshot().playerCharge).toBe(before.playerCharge)
+    expect(view.state).toBe('cracked')
+    // Exactly handTapDamage HP came off, and that much charge was spent (capped per tap).
+    const remainingFrac = 1 - (view.crack ?? 0)
+    expect(Math.round(remainingFrac * startHp)).toBe(startHp - cfg.handTapDamage)
+    expect(engine.snapshot().playerCharge).toBe(chargeBefore - cfg.handTapDamage)
   })
 
-  it('the Boss chips (partial damage, no time penalty) when tapped under-charged', () => {
-    // Boss is at centre with HP far above the charge pool, so a tap always chips it.
+  it('the Boss chips (partial damage, no time penalty) when tapped', () => {
     const seed = 'boss-chip'
     const engine = createEngine({ difficulty: DIFF, seed, now: () => 0 })
     const cx = Math.floor(cfg.width / 2)
@@ -153,7 +153,7 @@ describe('tapping tiles', () => {
     const events = engine.reveal({ x: cx, y: cy })
     expect(events.some(e => e.kind === 'tileCracked')).toBe(true)
     expect(engine.snapshot().timeRemaining).toBe(timeBefore) // tapping costs no time
-    expect(engine.snapshot().playerCharge).toBe(0) // charge spent as damage
+    expect(engine.snapshot().playerCharge).toBe(cfg.startingCharge - cfg.handTapDamage)
     const view = engine.snapshot().tiles.find(v => v.coord.x === cx && v.coord.y === cy)!
     expect(view.state).toBe('cracked')
     expect(view.crack).toBeGreaterThan(0) // HP bar reflects the damage

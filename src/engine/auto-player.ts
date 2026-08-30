@@ -4,10 +4,10 @@
  * validates.
  *
  * Rules it plays by (mirrors the engine):
- *  - Only Common tiles can be cleared by tapping; tougher tiles are shielded and need a mine
- *    blast to reduce their HP. So the player taps Commons (clearing ground or arming mines)
- *    and detonates mines to clear the tough tiles — aiming each blast where the tough tiles
- *    (and other mines) are densest.
+ *  - Any tile can be tapped, but a hand-tap only chips a little; a mine blast clears tough
+ *    tiles fast. So the player taps Commons (clearing/arming), detonates mines to clear tough
+ *    clusters — aiming each blast where the tough tiles and other mines are densest — and
+ *    only chips tough tiles by hand as a last resort.
  */
 
 import type { BoardSnapshot, Coord, TileView } from './types'
@@ -59,22 +59,24 @@ export function autoPlay(snap: BoardSnapshot): AutoAction | null {
     if (mines.length > 0) return { type: 'detonate', coord: bestMine(mines, snap).coord }
     return null
   }
-
-  // Tap the cheapest affordable Common (clears ground or arms a hidden mine).
   const commons = cov.filter(t => t.tier === 'common')
+
+  // Broke with a mine banked → detonate to refuel (and clear tough ground).
+  if (snap.playerCharge === 0 && mines.length > 0) return { type: 'detonate', coord: bestMine(mines, snap).coord }
+
+  // Tap a Common (cheap clear; also arms a hidden mine).
   if (commons.length > 0 && snap.playerCharge >= 1) return { type: 'reveal', coord: commons[0]!.coord }
 
-  // Otherwise detonate a mine to clear tough ground (and refuel + chain-arm).
+  // Detonate a mine to clear tough ground fast (far better than chipping by hand).
   if (mines.length > 0) return { type: 'detonate', coord: bestMine(mines, snap).coord }
 
-  // No mines: grind the Boss by tapping if we can pay for a hit.
-  const boss = cov.find(t => t.tier === 'boss')
-  if (boss && snap.playerCharge >= 1) return { type: 'reveal', coord: boss.coord }
+  // No mines left: chip a tough tile / Boss by hand — slow, but it makes progress.
+  if (snap.playerCharge >= 1) {
+    const tough = cov.find(t => t.tier !== 'common') ?? cov[0]!
+    return { type: 'reveal', coord: tough.coord }
+  }
 
-  // Tap a Common in hope it hides a mine that arms (even when broke — arming is free). Never
-  // tap a shielded tough tile; that is a no-op a driver would loop on.
+  // Broke and no mines: tap a Common hoping to arm a hidden mine (free), else give up.
   if (commons.length > 0) return { type: 'reveal', coord: commons[0]!.coord }
-
-  // Only shielded tough tiles remain with no mines — genuinely stuck.
   return null
 }

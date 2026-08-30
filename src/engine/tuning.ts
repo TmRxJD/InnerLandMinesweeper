@@ -16,9 +16,14 @@ export interface TierBand {
 export interface DifficultyConfig {
   readonly width: number
   readonly height: number
-  /** Number of mines on the board — an explicit cap, not a density, so it doesn't balloon
-   *  with board area. Mines are your ammunition for clearing blast-only tough tiles. */
+  /** Number of mines on the board — an explicit cap. Mines are the fast way to clear tough
+   *  tiles; you *can* chip tough tiles by hand, but slowly (see handTapDamage), so mines
+   *  stay valuable while their count can drop with difficulty. */
   readonly mineCount: number
+  /** Max HP a single hand-tap removes. Commons (HP ≤ 2) still clear in one tap; tough tiles
+   *  take many taps, so a blast (9× charge, uncapped) is far better. Lower = tougher to
+   *  hand-clear, so scarce mines matter more. */
+  readonly handTapDamage: number
   /** Relative weights for tier assignment across the board. */
   readonly tierWeights: Readonly<Record<Tier, number>>
   /** How strongly tough tiles cluster together (0 = uniform, 1 = maximally clumped). */
@@ -66,7 +71,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   gentle: {
     width: 9,
     height: 9,
-    mineCount: 19,
+    mineCount: 18,
+    handTapDamage: 4,
     tierWeights: { common: 13, advanced: 4, elite: 1.6, fleet: 0.5, boss: 0 },
     hardGroundGradient: 0.16,
     maxMineCharge: 6,
@@ -83,7 +89,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   standard: {
     width: 11,
     height: 11,
-    mineCount: 30,
+    mineCount: 28,
+    handTapDamage: 4,
     tierWeights: { common: 11, advanced: 4.5, elite: 2.2, fleet: 0.9, boss: 0 },
     hardGroundGradient: 0.2,
     maxMineCharge: 6,
@@ -100,7 +107,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   hard: {
     width: 15,
     height: 15,
-    mineCount: 58,
+    mineCount: 50,
+    handTapDamage: 4,
     tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
     hardGroundGradient: 0.26,
     maxMineCharge: 7,

@@ -168,16 +168,12 @@ class Engine implements MinesweeperEngine {
   // -- ground clicks -------------------------------------------------------
 
   private clickGround(tile: Tile, events: GameEvent[]): void {
-    // Only Common enemies and the Boss can be worked by hand. The Boss is the slow end-game
-    // grind; everything else tough (Advanced/Elite/Fleet) is shielded — only a mine blast
-    // reduces its HP.
-    if (tile.tier !== 'common' && tile.tier !== 'boss') {
-      events.push({ kind: 'tileShielded', coord: { x: tile.x, y: tile.y }, tier: tile.tier })
-      return
-    }
-
-    if (this.playerCharge >= tile.hp) {
-      // Clean clear: pay the tile's full (hidden) HP. One tile per click — no flood-fill.
+    // Any tile can be worked by hand, but a single tap removes at most `handTapDamage` HP
+    // (and never more charge than that). Commons clear in one tap; tough tiles take many, so
+    // a blast is far better. One tile per tap — no flood-fill.
+    const applied = Math.min(this.playerCharge, this.cfg.handTapDamage)
+    if (applied >= tile.hp) {
+      // Clean clear: pay the tile's full (hidden) HP.
       const cost = tile.hp
       this.setPlayerCharge(this.playerCharge - cost, events)
       this.clearGroundTile(tile, cost, events)
@@ -185,12 +181,10 @@ class Engine implements MinesweeperEngine {
       return
     }
 
-    // Under-charged tap: spend whatever charge remains as partial damage (a broke player
-    // deals nothing). The HP bar shows the dent; finish it with more charge later.
-    const damage = this.playerCharge
-    if (damage > 0) {
-      tile.hp -= damage
-      this.setPlayerCharge(0, events)
+    // Partial hand-chip: dent it by `applied` (0 if broke). The HP bar shows the progress.
+    if (applied > 0) {
+      tile.hp -= applied
+      this.setPlayerCharge(this.playerCharge - applied, events)
     }
     this.damageTile(tile, events)
     this.checkWin(events)

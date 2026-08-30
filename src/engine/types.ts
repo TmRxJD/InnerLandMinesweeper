@@ -97,10 +97,8 @@ export type GameEvent =
   // A blast vaporises a tile: it counts as cleared, but its number is never revealed —
   // information stays tied to risky manual taps, and blasts stay free of info leakage.
   | { kind: 'tileDestroyed'; coord: Coord }
-  // Tapped a tough (non-Common) ground tile: it can't be cleared by hand — only a mine
-  // blast reduces its HP. No state change; the UI nudges the player.
-  | { kind: 'tileShielded'; coord: Coord; tier: Tier }
-  // A tappable tile (Common/Boss) took partial damage; the HP bar reflects `crack` (0..1).
+  // A tile took partial damage (hand-chip under HP, or a blast that didn't finish it); the
+  // HP bar reflects `crack` (0..1).
   | { kind: 'tileCracked'; coord: Coord; crack: number }
   | { kind: 'mineDetonated'; coord: Coord; damage: number; radius: readonly Coord[] }
   | { kind: 'mineChargeChanged'; coord: Coord; from: number; to: number }
