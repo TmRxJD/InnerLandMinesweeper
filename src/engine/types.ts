@@ -100,7 +100,7 @@ export type GameEvent =
   // A tile took partial damage (hand-chip under HP, or a blast that didn't finish it); the
   // HP bar reflects `crack` (0..1).
   | { kind: 'tileCracked'; coord: Coord; crack: number }
-  | { kind: 'mineDetonated'; coord: Coord; damage: number; radius: readonly Coord[] }
+  | { kind: 'mineDetonated'; coord: Coord; intensity: number; radius: readonly Coord[] }
   | { kind: 'mineChargeChanged'; coord: Coord; from: number; to: number }
   | { kind: 'numberDecremented'; coord: Coord; from: number; to: number }
   | { kind: 'playerChargeChanged'; from: number; to: number }

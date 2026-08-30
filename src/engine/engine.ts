@@ -98,16 +98,17 @@ class Engine implements MinesweeperEngine {
     const gained = Math.round(tile.mineCharge * this.cfg.chargeConversion)
     if (gained !== 0) this.setPlayerCharge(this.playerCharge + gained, events)
 
-    // 2. The mine leaves the board. Peak damage lands on the ring next to the mine and
-    //    falls off with distance (see blastFalloff) — a blast is an explosion, not a slab,
-    //    so its edge only chips while its core clears.
-    const peakDamage = this.cfg.blastBaseDamage * tile.mineCharge
+    // 2. The mine leaves the board. A blast removes a FRACTION of each tile's max HP, so its
+    //    bite scales with the target: it never one-shots a full-HP tough tile the way flat
+    //    damage did. The core ring takes the full fraction; it falls off with distance
+    //    (blastFalloff), and the mine's charge multiplies it (a charged mine clears outright).
+    const peakFraction = this.cfg.blastPct * tile.mineCharge
     const radiusTiles = withinRadius(this.board, tile.x, tile.y, this.cfg.blastRadius)
     tile.state = 'detonated'
     events.push({
       kind: 'mineDetonated',
       coord: { x: tile.x, y: tile.y },
-      damage: peakDamage,
+      intensity: tile.mineCharge,
       radius: radiusTiles.map(t => ({ x: t.x, y: t.y })),
     })
 
@@ -123,10 +124,13 @@ class Engine implements MinesweeperEngine {
         continue
       }
       if (t.state === 'cleared') continue
-      // Distance falloff: the ring next to the mine (dist 1) takes peak damage; each ring
-      // further out is multiplied by blastFalloff again. HP matters at range.
+      // Percentage falloff: the core ring loses `peakFraction` of its MAX HP; each ring
+      // further out is multiplied by blastFalloff again. Because it's a fraction of max HP,
+      // a tough tile loses more absolute HP but survives the same number of blasts as a weak
+      // one — HP scales cleanly and no single blast flattens a full-HP tile.
       const dist = Math.max(Math.abs(t.x - tile.x), Math.abs(t.y - tile.y))
-      const dmg = Math.round(peakDamage * Math.pow(this.cfg.blastFalloff, Math.max(0, dist - 1)))
+      const frac = peakFraction * Math.pow(this.cfg.blastFalloff, Math.max(0, dist - 1))
+      const dmg = Math.max(0, Math.round(t.maxHp * frac))
       t.hp -= dmg
       if (t.hp <= 0) {
         // Vaporised by the blast: cleared, but its number is never revealed. Information

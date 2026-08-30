@@ -70,10 +70,12 @@ export class FxLayer {
   }
 
   /** A mine going off: shockwave ring, debris burst, and a screen kick scaled by damage. */
-  detonation(x: number, y: number, damage: number): void {
+  detonation(x: number, y: number, intensity: number): void {
     if (this.opts.reduceMotion) return
     const { cx, cy } = this.cellCenter(x, y)
     const { size } = this.opts.cellMetrics()
+    // `intensity` is the mine's charge (1..maxMineCharge): a chip pops small, a charged mine roars.
+    const damage = 3 + intensity * 1.6
     this.shocks.push({ x: cx, y: cy, radius: size * 0.3, maxRadius: size * (2 + damage * 0.4), life: 1 })
     const n = Math.min(48, 14 + damage * 4)
     for (let i = 0; i < n; i++) {

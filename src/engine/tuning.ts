@@ -36,13 +36,17 @@ export interface DifficultyConfig {
   readonly startingCharge: number
   /** Hard ceiling on the player's charge pool — detonations can't inflate it past this. */
   readonly maxPlayerCharge: number
-  /** Peak blast damage (before the mine's charge multiplier), dealt to the ring next to the
-   *  mine. Falls off with distance — see blastFalloff. */
-  readonly blastBaseDamage: number
-  /** Per-ring damage multiplier as a blast travels outward from the mine. The adjacent ring
-   *  (distance 1) takes full `blastBaseDamage × charge`; distance 2 takes that × blastFalloff,
-   *  distance 3 × blastFalloff², and so on. < 1 makes a blast an explosion (strong core, weak
-   *  edge) instead of a uniform slab, so tile HP decides what survives at range. */
+  /** Fraction of a tile's MAX HP a blast removes at the core ring, per point of mine charge.
+   *  e.g. 0.5 with a charge-1 mine strips 50% of max HP at distance 1; a charge-2 mine clears
+   *  outright. Because it scales with the tile's own HP, a blast never one-shots a full-HP
+   *  tough tile — it takes the same number of blasts as a weak one. Falls off with distance
+   *  (blastFalloff). */
+  readonly blastPct: number
+  /** Per-ring multiplier as a blast travels outward from the mine. The adjacent ring
+   *  (distance 1) takes the full `blastPct × charge` fraction; distance 2 takes that ×
+   *  blastFalloff, distance 3 × blastFalloff², and so on. < 1 makes a blast an explosion
+   *  (strong core, weak edge) instead of a uniform slab, so tile HP decides what survives
+   *  at range. */
   readonly blastFalloff: number
   /** Chebyshev radius of a detonation. Blasts vaporise without revealing numbers, so a
    *  wider radius clears more ground without leaking information — it is the main engine
@@ -89,7 +93,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     timerSeconds: 300,
     startingCharge: 9,
     maxPlayerCharge: 10,
-    blastBaseDamage: 10,
+    blastPct: 0.65,
     blastRadius: 2,
     blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
@@ -109,7 +113,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     timerSeconds: 420,
     startingCharge: 9,
     maxPlayerCharge: 10,
-    blastBaseDamage: 10,
+    blastPct: 0.65,
     blastRadius: 2,
     blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
@@ -126,10 +130,10 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hardGroundGradient: 0.26,
     maxMineCharge: 7,
     bands: SHARED_BANDS,
-    timerSeconds: 900,
+    timerSeconds: 1000,
     startingCharge: 12,
     maxPlayerCharge: 14,
-    blastBaseDamage: 10,
+    blastPct: 0.65,
     blastRadius: 2,
     blastFalloff: 0.4,
     chargeGainPerOverlap: 1,

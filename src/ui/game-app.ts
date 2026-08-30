@@ -411,7 +411,7 @@ export class GameApp {
     for (const e of events) {
       switch (e.kind) {
         case 'mineDetonated':
-          this.fx.detonation(e.coord.x, e.coord.y, e.damage)
+          this.fx.detonation(e.coord.x, e.coord.y, e.intensity)
           // Flash every tile the blast touched so the affected area is unmistakable.
           this.pulseTile(e.coord, 'blast-origin')
           for (const c of e.radius) this.pulseTile(c, 'blast-hit')
