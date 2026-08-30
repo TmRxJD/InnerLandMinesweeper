@@ -9,19 +9,15 @@
  * treats as "nothing useful to do").
  */
 
-import type { BoardSnapshot, Coord, TileView } from '../engine/types'
+import type { BoardSnapshot, TileView } from '../engine/types'
+import { autoPlay, type AutoAction } from '../engine/auto-player'
 
-export interface Action {
-  readonly type: 'reveal' | 'detonate'
-  readonly coord: Coord
-}
+export type Action = AutoAction
 
 export interface Bot {
   readonly name: string
   step(snap: BoardSnapshot): Action | null
 }
-
-const TIER_COST: Record<TileView['tier'], number> = { light: 1, medium: 3, heavy: 5, elite: 7 }
 
 function covered(snap: BoardSnapshot): TileView[] {
   return snap.tiles.filter(t => t.state === 'covered' || t.state === 'cracked')
@@ -32,35 +28,12 @@ function armed(snap: BoardSnapshot): TileView[] {
 }
 
 /**
- * A reasonable-but-not-clever player. Clears the cheapest-looking ground first, arms mines
- * as it hits them, and detonates its most-charged mine whenever the pool runs low. This is
- * the proxy for "can a sensible player finish this board?"
+ * The sensible player: the shared reference strategy (also used by the in-game demo). It is
+ * the proxy for "can a reasonable player finish this board?"
  */
 export const greedyBot: Bot = {
   name: 'greedy',
-  step(snap) {
-    const mines = armed(snap)
-    const cov = covered(snap)
-    if (cov.length === 0) {
-      // Only armed mines remain — detonate them to satisfy "all mines uncovered".
-      if (mines.length > 0) return { type: 'detonate', coord: mostCharged(mines).coord }
-      return null
-    }
-    cov.sort((a, b) => TIER_COST[a.tier] - TIER_COST[b.tier])
-    const cheapest = cov[0]!
-    // Can't afford even the cheapest covered tile? Detonate a banked mine rather than
-    // chipping — blasts clear tough ground and refill the pool. Only chip when genuinely
-    // out of mines (early game), which is what keeps honest cracks rare.
-    if (TIER_COST[cheapest.tier] > snap.playerCharge) {
-      if (mines.length > 0) return { type: 'detonate', coord: mostCharged(mines).coord }
-      return { type: 'reveal', coord: cheapest.coord } // forced chip
-    }
-    return { type: 'reveal', coord: cheapest.coord }
-  },
-}
-
-function mostCharged(mines: TileView[]): TileView {
-  return mines.reduce((a, b) => ((b.mineCharge ?? 1) > (a.mineCharge ?? 1) ? b : a))
+  step: autoPlay,
 }
 
 /**

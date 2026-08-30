@@ -14,6 +14,7 @@
 import { createEngine } from '../engine/engine'
 import { DIFFICULTIES } from '../engine/tuning'
 import { randomSeed } from '../engine/rng'
+import { autoPlay } from '../engine/auto-player'
 import type { BoardSnapshot, Coord, Difficulty, EventList, GameResult, MinesweeperEngine, Tier, TileView } from '../engine/types'
 import { FxLayer } from './fx-layer'
 
@@ -58,6 +59,10 @@ export class GameApp {
   private lastFrame = 0
   private paused = false
 
+  private demo = false
+  private demoTimers: ReturnType<typeof setTimeout>[] = []
+  private cursor!: HTMLElement
+
   private readonly onResult: ((r: GameResult) => void) | undefined
 
   constructor(root: HTMLElement, opts: GameAppOptions = {}) {
@@ -76,6 +81,7 @@ export class GameApp {
     this.fxCanvas = root.querySelector('.ilm-fx')!
     this.banner = root.querySelector('.ilm-banner')!
     this.pausedEl = root.querySelector('.ilm-paused')!
+    this.cursor = root.querySelector('.ilm-cursor')!
     this.elCharge = root.querySelector('[data-charge]')!
     this.elChargeFill = root.querySelector('.ilm-chargebar__fill')!
     this.elTime = root.querySelector('[data-time]')!
@@ -119,11 +125,13 @@ export class GameApp {
           <span class="ilm-stat__label">Difficulty</span>
           <select class="ilm-select" data-difficulty>${opts}</select>
         </label>
+        <button class="ilm-btn" data-demo>Watch demo</button>
         <button class="ilm-btn" data-new>New board</button>
       </div>
       <div class="ilm-stage">
         <div class="ilm-board" role="grid" aria-label="Minesweeper board"></div>
         <canvas class="ilm-fx"></canvas>
+        <div class="ilm-cursor" aria-hidden="true"></div>
         <div class="ilm-paused">Paused</div>
         <div class="ilm-banner">
           <div class="ilm-banner__card">
@@ -144,9 +152,10 @@ export class GameApp {
   private wireControls(): void {
     const sel = this.root.querySelector<HTMLSelectElement>('[data-difficulty]')!
     sel.value = this.difficulty
-    sel.addEventListener('change', () => this.newGame(sel.value as Difficulty, randomSeed()))
-    this.root.querySelector('[data-new]')!.addEventListener('click', () => this.newGame(this.difficulty, randomSeed()))
-    this.root.querySelector('[data-again]')!.addEventListener('click', () => this.newGame(this.difficulty, randomSeed()))
+    sel.addEventListener('change', () => { this.stopDemo(); this.newGame(sel.value as Difficulty, randomSeed()) })
+    this.root.querySelector('[data-new]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
+    this.root.querySelector('[data-again]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
+    this.root.querySelector('[data-demo]')!.addEventListener('click', () => this.toggleDemo())
     this.board.addEventListener('keydown', e => this.onKey(e as KeyboardEvent))
   }
 
@@ -217,6 +226,7 @@ export class GameApp {
   // -- input -------------------------------------------------------------
 
   private onTileClick(coord: Coord): void {
+    if (this.demo) this.stopDemo() // a real interaction takes control from the demo
     if (this.engine.snapshot().status !== 'playing' || this.paused) return
     const tile = this.tileView(coord)
     if (!tile) return
@@ -385,6 +395,81 @@ export class GameApp {
     if (!this.paused) this.lastFrame = performance.now() // don't credit hidden time to the timer
   }
 
+  // -- watch demo --------------------------------------------------------
+
+  private toggleDemo(): void {
+    if (this.demo) this.stopDemo()
+    else this.startDemo()
+  }
+
+  private startDemo(): void {
+    this.demo = true
+    this.root.classList.add('is-demo')
+    this.root.querySelector('[data-demo]')!.textContent = 'Stop demo'
+    if (this.engine.snapshot().status !== 'playing') this.newGame(this.difficulty, randomSeed())
+    this.demoStep()
+  }
+
+  private stopDemo(): void {
+    if (!this.demo) return
+    this.demo = false
+    this.root.classList.remove('is-demo')
+    this.cursor.classList.remove('is-click')
+    this.root.querySelector('[data-demo]')!.textContent = 'Watch demo'
+    for (const id of this.demoTimers) clearTimeout(id)
+    this.demoTimers = []
+  }
+
+  /** One watchable move: glide the ghost cursor to the target, "click", apply, repeat. */
+  private demoStep(): void {
+    if (!this.demo) return
+    const snap = this.engine.snapshot()
+    if (snap.status !== 'playing') {
+      // Finished a board — pause on the result, then start a fresh one and keep going.
+      this.demoTimers.push(
+        globalThis.setTimeout(() => {
+          if (!this.demo) return
+          this.newGame(this.difficulty, randomSeed())
+          this.demoStep()
+        }, 2400),
+      )
+      return
+    }
+    const action = autoPlay(snap)
+    if (!action) {
+      this.demoTimers.push(globalThis.setTimeout(() => this.demoStep(), 400))
+      return
+    }
+    this.moveCursorTo(action.coord)
+    this.demoTimers.push(
+      globalThis.setTimeout(() => {
+        if (!this.demo) return
+        this.cursor.classList.add('is-click')
+        this.performAction(action)
+        this.demoTimers.push(
+          globalThis.setTimeout(() => {
+            this.cursor.classList.remove('is-click')
+            this.demoStep()
+          }, 260),
+        )
+      }, 430),
+    )
+  }
+
+  private performAction(action: { type: 'reveal' | 'detonate'; coord: Coord }): void {
+    if (action.type === 'detonate') this.apply(this.engine.detonate(action.coord))
+    else this.apply(this.engine.reveal(action.coord))
+  }
+
+  private moveCursorTo(coord: Coord): void {
+    const el = this.tiles[this.indexOf(coord)]
+    if (!el) return
+    const stage = this.stage.getBoundingClientRect()
+    const r = el.getBoundingClientRect()
+    this.cursor.style.left = `${r.left - stage.left + r.width / 2}px`
+    this.cursor.style.top = `${r.top - stage.top + r.height / 2}px`
+  }
+
   // -- geometry / helpers ------------------------------------------------
 
   private syncCanvasSize(): void {
@@ -419,6 +504,7 @@ export class GameApp {
   }
 
   destroy(): void {
+    this.stopDemo()
     this.stopLoop()
     this.fx.destroy()
     document.removeEventListener('visibilitychange', this.onVisibility)

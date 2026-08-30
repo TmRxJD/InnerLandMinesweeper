@@ -356,3 +356,29 @@
   outline: 2px dashed var(--warn);
   outline-offset: 1px;
 }
+
+/* Watch-demo ghost cursor. Hidden until demo mode; glides between tiles and pulses on
+   each "click" so the auto-play reads as someone playing. */
+.ilm-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  border: 2px solid var(--energy);
+  background: rgba(53, 224, 255, 0.16);
+  box-shadow: 0 0 10px var(--energy), inset 0 0 6px rgba(53, 224, 255, 0.4);
+  opacity: 0;
+  z-index: 8;
+  pointer-events: none;
+  transition: left 360ms cubic-bezier(0.4, 0, 0.2, 1), top 360ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 140ms ease, opacity 200ms ease;
+}
+.ilm-root.is-demo .ilm-cursor { opacity: 1; }
+.ilm-cursor.is-click { transform: scale(0.6); background: rgba(53, 224, 255, 0.5); }
+.reduce-motion .ilm-cursor { transition: opacity 200ms ease; }
+
+/* A subtle running badge so it's clear the game is playing itself. */
+.ilm-root.is-demo .ilm-board { cursor: default; }
