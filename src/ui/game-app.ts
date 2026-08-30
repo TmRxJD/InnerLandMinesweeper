@@ -579,6 +579,7 @@ export class GameApp {
 
   private startDemo(): void {
     this.demo = true
+    this.demoStuck = 0
     this.root.classList.add('is-demo')
     this.root.querySelector('[data-demo]')!.textContent = 'Stop demo'
     if (this.engine.snapshot().status !== 'playing') this.newGame(this.difficulty, randomSeed())
@@ -595,35 +596,52 @@ export class GameApp {
     this.demoTimers = []
   }
 
+  /** A signature of "progress" — if it doesn't change after a move, the demo made no
+   *  headway (e.g. only shielded tiles and no mines left). */
+  private progressSig(snap: BoardSnapshot): string {
+    let covered = 0
+    let armed = 0
+    for (const t of snap.tiles) {
+      if (t.state === 'covered' || t.state === 'cracked') covered++
+      else if (t.state === 'armed') armed++
+    }
+    return `${covered}|${armed}|${snap.playerCharge}`
+  }
+
+  private demoStuck = 0
+
+  private demoRestart(delay: number): void {
+    this.demoStuck = 0
+    this.demoTimers.push(
+      globalThis.setTimeout(() => {
+        if (!this.demo) return
+        this.newGame(this.difficulty, randomSeed())
+        this.demoStep()
+      }, delay),
+    )
+  }
+
   /** One watchable move: glide the ghost cursor to the target, "click", apply, repeat. */
   private demoStep(): void {
     if (!this.demo) return
     const snap = this.engine.snapshot()
-    if (snap.status !== 'playing') {
-      // Finished a board — pause on the result, then start a fresh one and keep going.
-      this.demoTimers.push(
-        globalThis.setTimeout(() => {
-          if (!this.demo) return
-          this.newGame(this.difficulty, randomSeed())
-          this.demoStep()
-        }, 2400),
-      )
-      return
-    }
+    if (snap.status !== 'playing') return this.demoRestart(2400) // won/lost — next board
     const action = autoPlay(snap)
-    if (!action) {
-      this.demoTimers.push(globalThis.setTimeout(() => this.demoStep(), 400))
-      return
-    }
+    if (!action) return this.demoRestart(1200) // bot gave up — next board
+
+    const sigBefore = this.progressSig(snap)
     this.moveCursorTo(action.coord)
     this.demoTimers.push(
       globalThis.setTimeout(() => {
         if (!this.demo) return
         this.cursor.classList.add('is-click')
         this.performAction(action)
+        // If a move made no progress a few times running, this board is stuck — move on.
+        this.demoStuck = this.progressSig(this.engine.snapshot()) === sigBefore ? this.demoStuck + 1 : 0
         this.demoTimers.push(
           globalThis.setTimeout(() => {
             this.cursor.classList.remove('is-click')
+            if (this.demoStuck >= 5) return this.demoRestart(1000)
             this.demoStep()
           }, 260),
         )

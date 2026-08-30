@@ -71,7 +71,10 @@ export function autoPlay(snap: BoardSnapshot): AutoAction | null {
   const boss = cov.find(t => t.tier === 'boss')
   if (boss && snap.playerCharge >= 1) return { type: 'reveal', coord: boss.coord }
 
-  // Last resort: tap something to make progress (a Common if any — chips/arms a mine).
+  // Tap a Common in hope it hides a mine that arms (even when broke — arming is free). Never
+  // tap a shielded tough tile; that is a no-op a driver would loop on.
   if (commons.length > 0) return { type: 'reveal', coord: commons[0]!.coord }
-  return { type: 'reveal', coord: cov[0]!.coord }
+
+  // Only shielded tough tiles remain with no mines — genuinely stuck.
+  return null
 }

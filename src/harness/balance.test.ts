@@ -18,7 +18,7 @@ function winRate(difficulty: Difficulty, bot: typeof greedyBot, n: number): numb
   return wins / n
 }
 
-const N = 40
+const N = 60
 
 describe.each<Difficulty>(['gentle', 'standard', 'hard'])('balance: %s', difficulty => {
   it('a sensible player wins the clear majority of boards', () => {

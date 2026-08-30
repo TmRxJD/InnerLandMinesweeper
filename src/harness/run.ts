@@ -21,24 +21,38 @@ const SECONDS_PER_MOVE = 2
 /** Hard cap on actions so a stuck bot can't spin forever. */
 const MAX_ACTIONS = 5000
 
+/** Board state that only changes when a move makes real headway (covered/armed/charge). */
+function progressSig(snap: ReturnType<MinesweeperEngineSnapshot>): string {
+  let covered = 0
+  let armed = 0
+  for (const t of snap.tiles) {
+    if (t.state === 'covered' || t.state === 'cracked') covered++
+    else if (t.state === 'armed') armed++
+  }
+  return `${covered}|${armed}|${snap.playerCharge}`
+}
+type MinesweeperEngineSnapshot = ReturnType<typeof createEngine>['snapshot']
+
 export function runGame(difficulty: Difficulty, seed: string, bot: Bot): GameResult {
   let t = 0
   const engine = createEngine({ difficulty, seed, now: () => t })
+  let stuck = 0
+  let lastSig = ''
   for (let i = 0; i < MAX_ACTIONS; i++) {
     const snap = engine.snapshot()
     if (snap.status !== 'playing') break
     const action = bot.step(snap)
-    if (!action) {
-      // Bot passed but game isn't over — nudge time so a pass can't hang the run.
-      t += SECONDS_PER_MOVE
-      const ev = engine.tick(SECONDS_PER_MOVE)
-      if (ev.some(e => e.kind === 'gameLost')) break
-      continue
-    }
+    if (!action) break // bot has no productive move left — stuck; score the board as-is
     if (action.type === 'reveal') engine.reveal(action.coord)
     else engine.detonate(action.coord)
     t += SECONDS_PER_MOVE
     engine.tick(SECONDS_PER_MOVE)
+    // No-progress guard: if several moves in a row change nothing (e.g. broke, probing
+    // Commons that are all ground), the board is stuck — stop rather than spin.
+    const sig = progressSig(engine.snapshot())
+    stuck = sig === lastSig ? stuck + 1 : 0
+    lastSig = sig
+    if (stuck >= 12) break
   }
   return (
     engine.result() ?? {
