@@ -539,17 +539,14 @@ export class GameApp {
         `<span class="ilm-orb__mult">${charge}×</span></span>`
       label = `armed Inner Land Mine, charge ${charge} times`
     } else {
-      // covered or cracked — the enemy sprite is a mask filled with the class colour.
+      // covered or cracked — the enemy sprite is a mask filled with the class colour, with
+      // a health bar shown from the start (full until you damage it).
       const sprite = `<span class="ilm-enemy" style="--sprite:url(${spriteFor(t.tier, t.coord.x, t.coord.y)})"></span>`
-      if (t.state === 'cracked' && t.crack !== undefined) {
-        el.style.setProperty('--crack', String(t.crack))
-        const hp = Math.max(0, 1 - t.crack)
-        el.innerHTML = `${sprite}<span class="ilm-hp" style="--hp:${hp}"></span>`
-        label = `${cls} enemy, ${Math.round(hp * 100)}% health`
-      } else {
-        el.innerHTML = sprite
-        label = `${cls} enemy`
-      }
+      const crack = t.crack ?? 0
+      if (t.state === 'cracked') el.style.setProperty('--crack', String(crack))
+      const hp = Math.max(0, 1 - crack)
+      el.innerHTML = `${sprite}<span class="ilm-hp" style="--hp:${hp}"></span>`
+      label = t.state === 'cracked' ? `${cls} enemy, ${Math.round(hp * 100)}% health` : `${cls} enemy`
     }
     el.setAttribute('aria-label', label)
     // Preserve roving tabindex.

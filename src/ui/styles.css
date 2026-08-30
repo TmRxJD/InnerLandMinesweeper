@@ -348,8 +348,8 @@
    class reads as one colour (grey/yellow/blue/red) while keeping its distinct shape. Sized
    off the exact (square) tile size and centred by the mask, fixing off-centre sprites. */
 .ilm-enemy {
-  width: calc(var(--tile-size) - 5px);
-  height: calc(var(--tile-size) - 5px);
+  position: absolute;
+  inset: 3px;
   -webkit-mask-image: var(--sprite);
   mask-image: var(--sprite);
   -webkit-mask-repeat: no-repeat;
@@ -367,8 +367,7 @@
 .ilm-tile[data-tier='fleet'] .ilm-enemy { --enemy-color: var(--enemy-fleet); }
 .ilm-tile[data-tier='boss'] .ilm-enemy {
   --enemy-color: var(--enemy-boss);
-  width: calc(var(--tile-size) - 1px);
-  height: calc(var(--tile-size) - 1px);
+  inset: 1px;
   filter: drop-shadow(0 0 4px var(--enemy-boss));
 }
 /* The boss is bigger and menacing. */
