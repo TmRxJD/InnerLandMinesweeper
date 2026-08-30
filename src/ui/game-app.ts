@@ -47,7 +47,8 @@ export class GameApp {
   private elChargeFill!: HTMLElement
   private elTime!: HTMLElement
   private elTimeStat!: HTMLElement
-  private elSeed!: HTMLElement
+  private elCoach!: HTMLElement
+  private helpDialog!: HTMLElement
 
   private width = 0
   private height = 0
@@ -86,7 +87,8 @@ export class GameApp {
     this.elChargeFill = root.querySelector('.ilm-chargebar__fill')!
     this.elTime = root.querySelector('[data-time]')!
     this.elTimeStat = root.querySelector('.ilm-stat--time')!
-    this.elSeed = root.querySelector('[data-seed]')!
+    this.elCoach = root.querySelector('[data-coach]')!
+    this.helpDialog = root.querySelector('[data-help-dialog]')!
 
     this.wireControls()
     this.fx = new FxLayer(this.fxCanvas, {
@@ -110,24 +112,35 @@ export class GameApp {
       .map(d => `<option value="${d}">${d[0]!.toUpperCase() + d.slice(1)}</option>`)
       .join('')
     return `
+      <header class="ilm-header">
+        <div class="ilm-title">
+          <span class="ilm-title__mark" aria-hidden="true"></span>
+          <span class="ilm-title__text">Inner Land Minesweeper</span>
+        </div>
+        <button class="ilm-iconbtn" data-help aria-label="How to play" title="How to play">?</button>
+      </header>
+
       <div class="ilm-hud">
-        <div class="ilm-stat ilm-stat--charge">
-          <span class="ilm-stat__label">Charge</span>
-          <span class="ilm-stat__value" data-charge>0</span>
-          <div class="ilm-chargebar"><div class="ilm-chargebar__fill"></div></div>
+        <div class="ilm-stats">
+          <div class="ilm-stat ilm-stat--charge">
+            <span class="ilm-stat__label">Charge</span>
+            <span class="ilm-stat__value" data-charge>0</span>
+            <div class="ilm-chargebar"><div class="ilm-chargebar__fill"></div></div>
+          </div>
+          <div class="ilm-stat ilm-stat--time">
+            <span class="ilm-stat__label">Time</span>
+            <span class="ilm-stat__value" data-time>0:00</span>
+          </div>
         </div>
-        <div class="ilm-stat ilm-stat--time">
-          <span class="ilm-stat__label">Time</span>
-          <span class="ilm-stat__value" data-time>0:00</span>
+        <div class="ilm-controls">
+          <select class="ilm-select" data-difficulty aria-label="Difficulty">${opts}</select>
+          <button class="ilm-btn" data-demo>Watch demo</button>
+          <button class="ilm-btn" data-new>New board</button>
         </div>
-        <div class="ilm-spacer"></div>
-        <label class="ilm-stat" style="min-width:auto">
-          <span class="ilm-stat__label">Difficulty</span>
-          <select class="ilm-select" data-difficulty>${opts}</select>
-        </label>
-        <button class="ilm-btn" data-demo>Watch demo</button>
-        <button class="ilm-btn" data-new>New board</button>
       </div>
+
+      <div class="ilm-coach" data-coach aria-live="polite"></div>
+
       <div class="ilm-stage">
         <div class="ilm-board" role="grid" aria-label="Minesweeper board"></div>
         <canvas class="ilm-fx"></canvas>
@@ -137,14 +150,65 @@ export class GameApp {
           <div class="ilm-banner__card">
             <div class="ilm-banner__title"></div>
             <div class="ilm-banner__detail"></div>
-            <button class="ilm-btn" data-again>Play again</button>
+            <button class="ilm-btn ilm-btn--primary" data-again>Play again</button>
           </div>
         </div>
       </div>
-      <div class="ilm-hud" style="font-size:11px;color:var(--ink-dim)">
-        <span>Seed <code data-seed></code></span>
-        <div class="ilm-spacer"></div>
-        <span>Click ground to sweep · click a glowing orb to detonate</span>
+
+      <div class="ilm-legend" aria-hidden="true">
+        <span class="ilm-legend__group">
+          <span class="ilm-legend__swatch" data-tier="light"></span>Light
+          <span class="ilm-legend__swatch" data-tier="medium"></span>Medium
+          <span class="ilm-legend__swatch" data-tier="heavy"></span>Heavy
+          <span class="ilm-legend__swatch" data-tier="elite"></span>Elite
+        </span>
+        <span class="ilm-legend__hint">tougher = more charge to clear</span>
+      </div>
+
+      ${this.helpMarkup()}
+    `
+  }
+
+  private helpMarkup(): string {
+    return `
+      <div class="ilm-help" data-help-dialog hidden role="dialog" aria-modal="true" aria-label="How to play">
+        <div class="ilm-help__card">
+          <button class="ilm-iconbtn ilm-help__close" data-help-close aria-label="Close">×</button>
+          <h2 class="ilm-help__title">How to play</h2>
+          <p class="ilm-help__lead">You're a mine <em>sweeper</em>. Finding a mine is good — mines are
+            your weapons. Clear every ground tile before time runs out.</p>
+
+          <div class="ilm-help__row">
+            <span class="ilm-help__icon ilm-help__icon--ground">3</span>
+            <div><b>Sweep ground.</b> Click a covered tile. If it's ground it clears and shows a
+              number — how many mines touch it, exactly like classic Minesweeper. Sweeping costs
+              <b>charge</b>.</div>
+          </div>
+          <div class="ilm-help__row">
+            <span class="ilm-help__icon ilm-help__icon--orb"></span>
+            <div><b>Find a mine → it arms.</b> A mine you click doesn't kill you — it uncovers as a
+              glowing orb. <b>Click the orb to detonate it:</b> it blasts a hole in the board and
+              refills your charge.</div>
+          </div>
+          <div class="ilm-help__row">
+            <span class="ilm-help__icon ilm-help__icon--tiers"></span>
+            <div><b>Tiers show toughness.</b> Light → Elite is how much charge a tile costs to clear.
+              The exact cost is hidden inside the band — that's the risk.</div>
+          </div>
+          <div class="ilm-help__row">
+            <span class="ilm-help__icon ilm-help__icon--crack"></span>
+            <div><b>Can't afford it?</b> The tile cracks instead of clearing, drains your charge, and
+              costs time. Detonate a mine to recharge rather than grinding.</div>
+          </div>
+          <div class="ilm-help__row">
+            <span class="ilm-help__icon ilm-help__icon--flag">✓</span>
+            <div><b>Win</b> by clearing every ground tile. <b>Lose</b> only if the timer runs out —
+              take your time and deduce.</div>
+          </div>
+
+          <p class="ilm-help__keys">Keyboard: arrow keys move · Enter / Space acts on the focused tile.</p>
+          <button class="ilm-btn ilm-btn--primary ilm-help__got" data-help-close>Got it</button>
+        </div>
       </div>
     `
   }
@@ -156,7 +220,27 @@ export class GameApp {
     this.root.querySelector('[data-new]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
     this.root.querySelector('[data-again]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
     this.root.querySelector('[data-demo]')!.addEventListener('click', () => this.toggleDemo())
+    this.root.querySelector('[data-help]')!.addEventListener('click', () => this.openHelp())
+    this.root.querySelectorAll('[data-help-close]').forEach(el => {
+      el.addEventListener('click', () => this.closeHelp())
+    })
+    this.helpDialog.addEventListener('click', e => {
+      if (e.target === this.helpDialog) this.closeHelp() // backdrop click
+    })
     this.board.addEventListener('keydown', e => this.onKey(e as KeyboardEvent))
+    document.addEventListener('keydown', this.onGlobalKey)
+  }
+
+  private openHelp(): void {
+    this.helpDialog.hidden = false
+    this.root.querySelector<HTMLElement>('[data-help-close]')?.focus()
+  }
+  private closeHelp(): void {
+    this.helpDialog.hidden = true
+    this.root.querySelector<HTMLElement>('[data-help]')?.focus()
+  }
+  private readonly onGlobalKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && !this.helpDialog.hidden) this.closeHelp()
   }
 
   // -- lifecycle ---------------------------------------------------------
@@ -174,7 +258,6 @@ export class GameApp {
     this.buildGrid(snap)
     this.fitBoard()
     this.banner.classList.remove('is-shown', 'win', 'lose')
-    this.elSeed.textContent = seed
     this.render(snap)
     requestAnimationFrame(() => this.syncCanvasSize())
     this.startLoop()
@@ -323,6 +406,32 @@ export class GameApp {
     this.elChargeFill.style.setProperty('--charge-pct', `${pct}%`)
     this.elTime.textContent = this.fmtTime(snap.timeRemaining)
     this.elTimeStat.classList.toggle('is-low', snap.timeRemaining <= 30)
+    this.updateCoach(snap)
+  }
+
+  /** A live one-line hint reflecting what the player should do next — the main "what is
+   *  happening / what do I do" indicator. */
+  private updateCoach(snap: BoardSnapshot): void {
+    if (snap.status !== 'playing') {
+      this.elCoach.textContent = ''
+      return
+    }
+    const armed = snap.tiles.some(t => t.state === 'armed')
+    const cleared = snap.tiles.some(t => t.state === 'cleared')
+    const covered = snap.tiles.filter(t => t.state === 'covered' || t.state === 'cracked')
+    const cheapestMin = covered.reduce((m, t) => Math.min(m, TIER_MIN_COST[t.tier]), Infinity)
+
+    let msg: string
+    if (!cleared && !armed) {
+      msg = 'Click any tile to sweep it — ground reveals a number, a mine arms as a glowing orb.'
+    } else if (armed && snap.playerCharge < cheapestMin) {
+      msg = 'Low charge — click a glowing orb to detonate it and recharge.'
+    } else if (armed) {
+      msg = 'A glowing orb is an armed mine — click it to detonate a blast and gain charge.'
+    } else {
+      msg = 'Sweep ground to reveal numbers (adjacent mines). Numbers guide you to the mines.'
+    }
+    this.elCoach.textContent = msg
   }
 
   private renderTile(el: HTMLButtonElement, t: TileView): void {
@@ -508,6 +617,7 @@ export class GameApp {
     this.stopLoop()
     this.fx.destroy()
     document.removeEventListener('visibilitychange', this.onVisibility)
+    document.removeEventListener('keydown', this.onGlobalKey)
     globalThis.removeEventListener?.('resize', this.onResize)
   }
 }

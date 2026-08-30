@@ -63,26 +63,87 @@
 
 @media (max-width: 520px) {
   .ilm-root { padding: 10px; border-radius: 12px; gap: 10px; }
-  .ilm-hud { gap: 10px 14px; }
-  /* Force a clean wrap: charge/time on the first line, controls on the next,
-     instead of the spacer shoving the difficulty picker off-screen. */
-  .ilm-spacer { flex-basis: 100%; height: 0; }
+  .ilm-hud { gap: 12px 14px; }
+  /* Stats and controls each take a full row and the controls stretch to fill it. */
+  .ilm-stats, .ilm-controls { flex-basis: 100%; }
+  .ilm-controls { justify-content: space-between; }
+  .ilm-title__text { font-size: 15px; }
 }
+
+/* ---- Header ----------------------------------------------------------- */
+
+.ilm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ilm-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ilm-title__mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: radial-gradient(circle at 50% 40%, #eaffff, var(--energy) 55%, #0b1622 100%);
+  box-shadow: 0 0 10px var(--energy);
+  transform: rotate(45deg);
+  flex: none;
+}
+.ilm-title__text {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.ilm-iconbtn {
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--tile-edge);
+  background: var(--tile-raised);
+  color: var(--ink-dim);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.ilm-iconbtn:hover { border-color: var(--energy-dim); color: var(--energy); }
+.ilm-iconbtn:focus-visible { outline: 2px solid var(--energy); outline-offset: 2px; }
 
 /* ---- HUD ------------------------------------------------------------- */
 
 .ilm-hud {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  gap: 14px 18px;
   flex-wrap: wrap;
+}
+.ilm-stats {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+.ilm-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .ilm-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 92px;
+  gap: 3px;
+  min-width: 84px;
 }
 .ilm-stat__label {
   font-size: 10px;
@@ -113,8 +174,6 @@
 }
 .reduce-motion .ilm-chargebar__fill { transition: none; }
 
-.ilm-spacer { flex: 1; }
-
 .ilm-btn {
   appearance: none;
   border: 1px solid var(--tile-edge);
@@ -125,6 +184,7 @@
   padding: 8px 14px;
   border-radius: 9px;
   cursor: pointer;
+  white-space: nowrap;
   transition: border-color 120ms ease, background 120ms ease;
 }
 .ilm-btn:hover { border-color: var(--energy-dim); }
@@ -134,6 +194,118 @@
   background: #14313b;
   color: var(--energy);
 }
+.ilm-btn--primary {
+  border-color: var(--energy-dim);
+  background: #14313b;
+  color: var(--energy);
+  font-weight: 600;
+}
+.ilm-btn--primary:hover { border-color: var(--energy); }
+
+/* ---- Coach line (live "what to do" hint) ----------------------------- */
+
+.ilm-coach {
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--ink-dim);
+  padding-left: 2px;
+}
+
+/* ---- Legend (tier key) ----------------------------------------------- */
+
+.ilm-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--ink-dim);
+  padding-top: 2px;
+}
+.ilm-legend__group { display: flex; align-items: center; gap: 6px; }
+.ilm-legend__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--tile-raised);
+  flex: none;
+  margin-left: 8px;
+}
+.ilm-legend__group > .ilm-legend__swatch:first-child { margin-left: 0; }
+.ilm-legend__swatch[data-tier='light']  { border-top: 3px solid var(--tier-light); }
+.ilm-legend__swatch[data-tier='medium'] { border-top: 4px solid var(--tier-medium); }
+.ilm-legend__swatch[data-tier='heavy']  { border-top: 5px solid var(--tier-heavy); }
+.ilm-legend__swatch[data-tier='elite']  { border-top: 6px solid var(--tier-elite); }
+.ilm-legend__hint { opacity: 0.8; font-style: italic; }
+
+/* ---- Help dialog ----------------------------------------------------- */
+
+.ilm-help {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 6, 12, 0.72);
+  backdrop-filter: blur(3px);
+}
+.ilm-help[hidden] { display: none; }
+.ilm-help__card {
+  position: relative;
+  max-width: 460px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid var(--tile-edge);
+  border-radius: 16px;
+  background: var(--bg-panel);
+  color: var(--ink);
+}
+.ilm-help__close { position: absolute; top: 14px; right: 14px; font-size: 20px; }
+.ilm-help__title { margin: 0 0 6px; font-size: 20px; }
+.ilm-help__lead { margin: 0 0 18px; color: var(--ink-dim); font-size: 13px; line-height: 1.5; }
+.ilm-help__lead em { color: var(--energy); font-style: normal; }
+.ilm-help__row {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.ilm-help__row b { color: var(--ink); }
+.ilm-help__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 800;
+  flex: none;
+  background: #0c1220;
+  border: 1px solid var(--tile-edge);
+}
+.ilm-help__icon--ground { color: var(--n3); }
+.ilm-help__icon--orb {
+  border-color: var(--energy-dim);
+  background: radial-gradient(circle at 50% 45%, #16323d, #0b1622);
+}
+.ilm-help__icon--orb::after {
+  content: '';
+  width: 16px; height: 16px; border-radius: 50%;
+  background: radial-gradient(circle, #eaffff, var(--energy) 60%, #0b1622 100%);
+  box-shadow: 0 0 8px var(--energy);
+}
+.ilm-help__icon--tiers { background: linear-gradient(90deg, var(--tier-light), var(--tier-medium), var(--tier-heavy), var(--tier-elite)); }
+.ilm-help__icon--crack { color: var(--danger); background-image: linear-gradient(45deg, transparent 44%, rgba(255,91,110,0.6) 46%, transparent 50%); }
+.ilm-help__icon--flag { color: var(--energy); }
+.ilm-help__keys { margin: 16px 0 18px; font-size: 12px; color: var(--ink-dim); }
+.ilm-help__got { width: 100%; }
 .ilm-select {
   appearance: none;
   border: 1px solid var(--tile-edge);
