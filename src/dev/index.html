@@ -2,17 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Inner Land Minesweeper — dev</title>
     <style>
-      html, body {
-        margin: 0;
-        min-height: 100%;
-        background: #05070c;
-        display: grid;
-        place-items: start center;
-        padding: 24px 12px;
-      }
+      html, body { margin: 0; min-height: 100%; background: #05070c; }
+      body { padding: 20px 12px; }
+      /* The mount is a normal block constrained by the viewport, so the game can measure
+         a real available width instead of a container that shrank to its own content. */
+      #app { width: 100%; max-width: 640px; margin: 0 auto; }
     </style>
   </head>
   <body>

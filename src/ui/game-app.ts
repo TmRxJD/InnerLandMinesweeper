@@ -93,6 +93,7 @@ export class GameApp {
     })
 
     document.addEventListener('visibilitychange', this.onVisibility)
+    globalThis.addEventListener?.('resize', this.onResize)
     this.newGame(this.difficulty, this.seed)
   }
 
@@ -162,11 +163,37 @@ export class GameApp {
     this.confirmCoord = null
     this.focusIndex = 0
     this.buildGrid(snap)
+    this.fitBoard()
     this.banner.classList.remove('is-shown', 'win', 'lose')
     this.elSeed.textContent = seed
     this.render(snap)
     requestAnimationFrame(() => this.syncCanvasSize())
     this.startLoop()
+  }
+
+  /** Size tiles so the board fits the viewport width, clamped to a comfortable touch
+   *  target. Pinch-zoom covers the smallest cases (dense boards on tiny screens). */
+  private fitBoard(): void {
+    const gap = 3
+    // Measure the mount parent (a real block constrained by the viewport), NOT the root —
+    // the root's own width is capped below, so measuring it would ratchet down on resize.
+    const cs = getComputedStyle(this.root)
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+    const outer = this.root.parentElement?.clientWidth || document.documentElement.clientWidth || 620
+    const avail = outer - padX
+    if (avail <= 0) return // not laid out yet
+    const raw = (avail - (this.width - 1) * gap) / this.width
+    const size = Math.max(24, Math.min(44, Math.floor(raw)))
+    this.root.style.setProperty('--tile-size', `${size}px`)
+    // Hug the board: cap the card to the board's natural width so it doesn't leave dead
+    // space on wide screens, while still shrinking to the viewport on narrow ones.
+    const boardW = this.width * size + (this.width - 1) * gap
+    this.root.style.maxWidth = `${boardW + padX}px`
+  }
+
+  private readonly onResize = (): void => {
+    this.fitBoard()
+    this.syncCanvasSize()
   }
 
   private buildGrid(snap: BoardSnapshot): void {
@@ -395,5 +422,6 @@ export class GameApp {
     this.stopLoop()
     this.fx.destroy()
     document.removeEventListener('visibilitychange', this.onVisibility)
+    globalThis.removeEventListener?.('resize', this.onResize)
   }
 }

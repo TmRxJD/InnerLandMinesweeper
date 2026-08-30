@@ -46,10 +46,12 @@
   --shake-x: 0px;
   --shake-y: 0px;
   position: relative;
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   flex-direction: column;
   gap: 14px;
   padding: 18px;
+  max-width: 100%;
   background: radial-gradient(120% 120% at 50% 0%, #131c2e 0%, var(--bg) 70%);
   border: 1px solid var(--tile-edge);
   border-radius: 16px;
@@ -57,6 +59,14 @@
   font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
   user-select: none;
   -webkit-user-select: none;
+}
+
+@media (max-width: 520px) {
+  .ilm-root { padding: 10px; border-radius: 12px; gap: 10px; }
+  .ilm-hud { gap: 10px 14px; }
+  /* Force a clean wrap: charge/time on the first line, controls on the next,
+     instead of the spacer shoving the difficulty picker off-screen. */
+  .ilm-spacer { flex-basis: 100%; height: 0; }
 }
 
 /* ---- HUD ------------------------------------------------------------- */
@@ -168,11 +178,15 @@
   border: 1px solid var(--tile-edge);
   display: grid;
   place-items: center;
-  font-size: 18px;
+  font-size: clamp(12px, calc(var(--tile-size) * 0.45), 18px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   color: var(--ink);
+  /* Touch: no 300ms tap delay, no double-tap zoom on a tile, no iOS long-press callout. */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 90ms ease, background 120ms ease, box-shadow 120ms ease;
 }
 .reduce-motion .ilm-tile { transition: none; }
