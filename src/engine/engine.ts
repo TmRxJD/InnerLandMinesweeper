@@ -113,17 +113,20 @@ class Engine implements MinesweeperEngine {
     // 3. Removing the mine decrements neighbours' live counts so numbers stay accurate.
     this.decrementAround(tile, events)
 
-    // 4. Apply blast damage.
+    // 4a. Trigger nearby mines — one ring BEYOND the blast as well as inside it. A mine that merely
+    //     NEIGHBOURS a blast tile catches the overlap: a hidden one arms, an armed one gains charge.
+    //     This is what lets non-touching mines (they never spawn adjacent) pump each other's stacks
+    //     without first being hooked together — detonating next to a mine reaches it.
+    for (const t of withinRadius(this.board, tile.x, tile.y, radius + 1)) {
+      if (!t.isMine) continue
+      if (t.state === 'covered') this.armMine(t, 'blast', events)
+      else if (t.state === 'armed') this.chargeMine(t, events)
+    }
+
+    // 4b. Apply blast damage — to GROUND only, and only within the true blast radius (the extra
+    //     ring above triggers mines but does not vaporise ground).
     for (const t of radiusTiles) {
-      if (t.isMine) {
-        // A mine caught in the blast reacts: a hidden one arms, an already-armed one gains
-        // charge (the Chrono-Jump overlap). Keyed on being INSIDE the blast, so mines next to
-        // each other reliably pump each other — it does not depend on the blast clearing ground.
-        if (t.state === 'covered') this.armMine(t, 'blast', events)
-        else if (t.state === 'armed') this.chargeMine(t, events)
-        continue
-      }
-      if (t.state === 'cleared') continue
+      if (t.isMine || t.state === 'cleared') continue
       // Flat `stack` damage to every tile in the square. 1-HP enemies vaporise; the Boss (the
       // only multi-hit tile) is chunked by `stack`.
       t.hp -= stack

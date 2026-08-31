@@ -126,7 +126,8 @@ function chainStarter(near: TileView[], boss: Coord, snap: BoardSnapshot): TileV
     let potential = 0
     for (const o of near) {
       if (o === m) continue
-      const charged = cheb(m.coord, o.coord) <= r ? 1 : 0
+      // A detonation charges mines one ring beyond its blast too (engine's radius+1 trigger).
+      const charged = cheb(m.coord, o.coord) <= r + 1 ? 1 : 0
       potential += Math.min(snap.stackCap, (o.mineCharge ?? 1) + charged)
     }
     const score = immediate + potential

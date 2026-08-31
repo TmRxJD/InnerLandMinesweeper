@@ -65,8 +65,16 @@ damage = stack                       (every tile in the square takes this)
 **clears more ground** *and* **hits the Boss harder and from further away** (radius = reach). A blast
 also:
 
-- **chain-arms** any hidden mine caught in it, and
-- **overlap-charges** every *armed* mine caught in it (+1 stack, capped at 6).
+- **chain-arms** any hidden mine, and
+- **overlap-charges** every *armed* mine (+1 stack, capped at the stack cap),
+
+for any mine **inside the blast OR one ring beyond it** — a mine that merely *neighbours* a blast
+tile still catches the overlap. This one-ring reach matters because mines never spawn touching: at
+stack 1 (radius 1) a mine two tiles away is just outside the blast, and without the +1 trigger you
+could only ever stack by hooking mines together first. With it, detonating *next to* a mine pumps
+it, so overlap-charging works straight off the spawn — hooks then *tighten* a cluster rather than
+being the only way to build one. (Ground damage stays at the true radius; the extra ring only
+triggers mines.)
 
 That overlap is the engine of the game: detonating outer mines pumps the inner ones, so you build
 the biggest stacks in the centre — exactly where the Boss is.

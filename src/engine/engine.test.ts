@@ -215,6 +215,37 @@ describe('detonation', () => {
     }
     throw new Error('no two-apart mine pair found')
   })
+
+  it('charges a mine one ring BEYOND the blast — non-touching mines pump each other without a hook', () => {
+    // Mines never spawn adjacent, so at stack 1 (blast radius 1) a mine two cells away is one ring
+    // outside the blast. The radius+1 trigger must still catch it, or stacks could only be built by
+    // hooking — which is the bug this guards. Find two mines exactly Chebyshev-2 apart, arm both,
+    // detonate one, and assert the other charged with no hook involved.
+    for (let i = 0; i < 400; i++) {
+      const seed = `trigger-${i}`
+      const board = truth(seed)
+      let pair: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null
+      const mines = board.tiles.filter(t => t.isMine)
+      for (const a of mines) {
+        for (const b of mines) {
+          if (b === a) continue
+          if (Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) === 2) { pair = { a, b }; break }
+        }
+        if (pair) break
+      }
+      if (!pair) continue
+      const engine = createEngine({ difficulty: DIFF, seed })
+      engine.reveal({ x: pair.a.x, y: pair.a.y }) // arm a (blast radius 1 at stack 1)
+      engine.reveal({ x: pair.b.x, y: pair.b.y }) // arm b, two cells away — outside the blast
+      expect(engine.snapshot().hookCharges).toBe(0) // no hook path is used here
+      const events = engine.detonate({ x: pair.a.x, y: pair.a.y })
+      expect(events.some(e => e.kind === 'mineChargeChanged')).toBe(true)
+      const bv = engine.snapshot().tiles.find(t => t.coord.x === pair!.b.x && t.coord.y === pair!.b.y)!
+      expect(bv.mineCharge).toBe(2)
+      return
+    }
+    throw new Error('no two-apart mine pair found')
+  })
 })
 
 describe('magnetic hook', () => {
