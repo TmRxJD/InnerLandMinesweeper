@@ -152,7 +152,7 @@ export class GameApp {
     return `
       <header class="ilm-header">
         <div class="ilm-title">
-          <span class="ilm-title__mark" aria-hidden="true"></span>
+          <img class="ilm-title__mark" src="${mineUrl}" alt="" aria-hidden="true" draggable="false">
           <span class="ilm-title__text">Inner Land Minesweeper</span>
         </div>
         <button class="ilm-iconbtn" data-help aria-label="How to play" title="How to play">?</button>

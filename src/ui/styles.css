@@ -86,13 +86,11 @@
   gap: 10px;
 }
 .ilm-title__mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: radial-gradient(circle at 50% 40%, #eaffff, var(--energy) 55%, #0b1622 100%);
-  box-shadow: 0 0 10px var(--energy);
-  transform: rotate(45deg);
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
   flex: none;
+  filter: drop-shadow(0 0 6px var(--energy));
 }
 .ilm-title__text {
   font-size: 17px;
