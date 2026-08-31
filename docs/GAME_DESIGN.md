@@ -94,7 +94,7 @@ their whole square for free) do the bulk of the work.
 
 ## The Boss
 
-A single tile at the exact centre, and the only multi-hit enemy (HP **18 / 28 / 40** by difficulty).
+A single tile at the exact centre, and the only multi-hit enemy (HP **18 / 30 / 56** by difficulty).
 You kill it by **delivering blast damage** to the centre: detonate charged mines near it. Like every
 special tile, the Boss is hit when it merely **neighbours the blast** (radius **+1**), so a mine one
 empty tile away already chips it — you do **not** have to land a mine right against it. Radius also
@@ -112,7 +112,7 @@ bare ≈√(2·HP) minimum) is the per-difficulty **hook-reliance dial** (`kille
 
 So the floor is hook-free on Easy and the ceiling always rewards hooks; difficulty is partly *how
 much the Boss forces you to route mines with hooks*. (There is no hand-tap fallback — the Boss is
-blast-only.) Empirically (headless, a deliberately weak no-hook player): Easy 100% / Standard ~68% /
+blast-only.) Empirically (headless, a deliberately weak no-hook player): Easy 100% / Standard ~31% /
 Hard 0% winnable without hooks, while the hook-using reference bot clears 100% everywhere.
 
 ---
@@ -124,11 +124,12 @@ A single-use, earnable, repeatable delivery tool — the game's main expression 
 - **Earn it.** Magnetic Hook bonus tiles hide on the field in the **outer/mid rings only** (never near
   the centre, so you can't farm them by tapping around the Boss). They are **not marked** — a hook is a
   *discovery*: clearing a tile that hides one — by tap or blast — grants **+1 hook charge** (the HUD
-  **Hooks** count ticks up; you can hold several). *(A dev/testing build can mark them: `?showhooks` in
-  the browser, `--debug` in the CLI.)*
-- **Spend it.** **Right-click** (desktop) or **long-press** (touch) an armed mine to pull it **one
-  tile toward the Boss** (dominant axis first). It slides into cleared ground, or **crushes** the
-  enemy in the way (a free clear); it can't move onto another mine, onto the Boss, or off-grid.
+  **Mag Hooks** count ticks up; you can hold several). *(A dev/testing build can mark them: `?showhooks`
+  in the browser, `--debug` in the CLI.)*
+- **Spend it.** **Drag** an armed mine one tile in **any of 8 directions** to pull it there (diagonals
+  included), or **right-click** / **long-press** it for a quick pull toward the Boss. It slides into
+  cleared ground, or **crushes** the enemy in the way (a free clear); it can't move onto another live
+  mine, onto the Boss, or off-grid.
 - **Numbers stay honest** — moving a mine updates the adjacent-mine counts at both the old and new
   cell.
 
@@ -234,7 +235,7 @@ habit: **median 0 / 0 / 3** (Easy / Standard / Hard) — on Easy the spread chai
 never hooks, on Hard it hooks a few mines to make the chain lethal.
 
 The hook-reliance ramp is the point of the `killerMargin` dial. Measured by the `noHook` reference
-(same player, gathering off), **winnable without hooks: Easy 100% / Standard ~59% / Hard 0%** — hooks
+(same player, gathering off), **winnable without hooks: Easy 100% / Standard ~31% / Hard 0%** — hooks
 optional on Easy, needed on many Standard boards, effectively required on Hard (rare tightly-spawned
 seeds aside). The **blind prober finishes 0%** everywhere — no cheese path. No balance flags.
 
@@ -247,8 +248,8 @@ Empirical — answered by play, not argument:
 
 - Does the **gather-then-chain** climax feel like *routing skill* or *busywork*? Levers: `gatherRadius`,
   `killerMargin`, Boss HP.
-- Hooks are abundant (14 / 22 / 32 tiles) but the bot needs only a few — should hooks be *scarcer* so
-  managing them is part of the puzzle, or is plenty-on-tap the friendlier call?
+- Hook tiles are 7 / 11 / 16 by difficulty; Hard now spends most of them. Is the scarcity right, or
+  should Hard be even tighter so a missed hook stings?
 - Times settled at ~96 / 130 / 160 s. Right feel, or should the field shrink to speed Easy up?
 - Is the outward→inward route compelling, or should generation shape the field more?
 

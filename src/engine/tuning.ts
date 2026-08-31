@@ -79,7 +79,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 13,
     height: 13,
     mineCount: 24, // ~14% of 169
-    hookCount: 14,
+    hookCount: 7,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
     bossHp: 18,
@@ -102,10 +102,10 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 17,
     height: 17,
     mineCount: 40, // ~14% of 289
-    hookCount: 22,
+    hookCount: 11,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
-    bossHp: 28,
+    bossHp: 30,
     parSeconds: 160,
     goldSeconds: 115,
     silverSeconds: 138,
@@ -116,7 +116,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     stackCap: 7,
     blastRadiusCap: 3,
     gatherRadius: 6,
-    killerMargin: 3, // standard: hooks strongly help, needed on many boards
+    killerMargin: 3, // standard: needs a few hooks on many boards, hook-free on some
     chargeGainPerOverlap: 1,
     chargeConversion: 2,
     scoreDifficultyMultiplier: 1.6,
@@ -125,10 +125,10 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 21,
     height: 21,
     mineCount: 62, // ~14% of 441
-    hookCount: 32,
+    hookCount: 16,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
-    bossHp: 40,
+    bossHp: 56,
     parSeconds: 190,
     goldSeconds: 145,
     silverSeconds: 168,
@@ -139,7 +139,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     stackCap: 8,
     blastRadiusCap: 3,
     gatherRadius: 7,
-    killerMargin: 2, // hard: near-minimal; only a hooked cluster reliably kills (rare seeds win hook-free)
+    killerMargin: 1, // hard: minimal mines -> must hook a tight cluster; rare seeds win hook-free
     chargeGainPerOverlap: 1,
     chargeConversion: 2,
     scoreDifficultyMultiplier: 2.4,
