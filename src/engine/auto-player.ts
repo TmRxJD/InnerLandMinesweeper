@@ -82,16 +82,33 @@ export function autoPlay(snap: BoardSnapshot): AutoAction | null {
     return null
   }
 
-  // 1. Detonate for free area-clearing whenever a blast actually does something.
+  // 1. Detonate. Two regimes:
   if (mines.length > 0) {
+    const boss = { x: (snap.width - 1) / 2 | 0, y: (snap.height - 1) / 2 | 0 }
+    const reaches = (m: TileView) => blastRadiusForStack(m.mineCharge ?? 1, RADIUS_CAP) >= cheb(m.coord, boss)
+    const usable = mines.filter(m => blastValue(m, snap) > 0)
+    if (snap.bossHp > 0 && usable.some(reaches)) {
+      // Boss endgame: don't dribble low-stack hits at the Boss. If a mine can kill it, fire.
+      const deliveries = usable.filter(reaches).sort((a, b) => (b.mineCharge ?? 1) - (a.mineCharge ?? 1))
+      if ((deliveries[0]!.mineCharge ?? 1) >= snap.bossHp) return { type: 'detonate', coord: deliveries[0]!.coord }
+      // Otherwise pump the cluster first: detonate the armed mine overlapping the MOST other
+      // armed mines (charging them), so a big delivery builds up before it's spent.
+      const chargeValue = (m: TileView) => mines.filter(o => o !== m && cheb(o.coord, m.coord) <= blastRadiusForStack(m.mineCharge ?? 1, RADIUS_CAP)).length
+      const pump = [...usable].sort((a, b) => chargeValue(b) - chargeValue(a))[0]!
+      if (chargeValue(pump) > 0 && !reaches(pump)) return { type: 'detonate', coord: pump.coord }
+      // No charger left that spares a delivery — spend the biggest delivery (chip the Boss).
+      return { type: 'detonate', coord: deliveries[0]!.coord }
+    }
+    // Normal: detonate for free area-clearing whenever a blast does something.
     const { mine, value } = bestMine(mines, snap)
     if (value > 0) return { type: 'detonate', coord: mine.coord }
   }
 
-  // 2. Open new ground / uncover mines. Prefer a covered tile on the cleared frontier so the
-  //    board opens contiguously; fall back to any covered tile (e.g. the very first move).
-  if (snap.playerCharge >= 1) {
-    const frontier = cov.find(t => hasRevealedNeighbour(t, snap, snap.width)) ?? cov[0]!
+  // 2. Open new ground / uncover mines. The Boss is tap-immune, so never target it (that would
+  //    spin uselessly). Prefer a covered tile on the cleared frontier; fall back to any tappable.
+  const tappable = cov.filter(t => t.tier !== 'boss')
+  if (tappable.length > 0 && snap.playerCharge >= 1) {
+    const frontier = tappable.find(t => hasRevealedNeighbour(t, snap, snap.width)) ?? tappable[0]!
     return { type: 'reveal', coord: frontier.coord }
   }
 

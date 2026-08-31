@@ -154,18 +154,23 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
     }
   }
 
-  // Cells within blast reach of the centre — mines here can hit the Boss.
+  // A tight ring of cells right around the Boss (within Chebyshev 2). Mines here can hit the
+  // Boss even at low stack (radius 1 reaches distance 1), and being clustered they overlap-
+  // charge each other as you detonate them in sequence — so the ring is always enough to kill
+  // the blast-only Boss without needing perfect charged-mine delivery.
+  const ring = 2
   const centreCells: number[] = []
-  for (let dy = -cfg.blastRadiusCap; dy <= cfg.blastRadiusCap; dy++) {
-    for (let dx = -cfg.blastRadiusCap; dx <= cfg.blastRadiusCap; dx++) {
+  for (let dy = -ring; dy <= ring; dy++) {
+    for (let dx = -ring; dx <= ring; dx++) {
       const nx = boss.x + dx
       const ny = boss.y + dy
       const i = idx(width, nx, ny)
       if (nx >= 0 && ny >= 0 && nx < width && ny < height && !reserved.has(i)) centreCells.push(i)
     }
   }
-  // Guarantee enough near-centre mines to kill the Boss by blasts alone (with headroom).
-  const minCentreMines = Math.min(centreCells.length, Math.ceil(cfg.bossHp / cfg.stackCap) + 3)
+  // Guarantee enough near-Boss mines that a straightforward detonation sequence (which
+  // self-charges the cluster) beats the Boss HP, with headroom.
+  const minCentreMines = Math.min(centreCells.length, Math.ceil(cfg.bossHp / 2) + 9)
 
   const mineCells = new Set<number>()
   rng.shuffle(centreCells)

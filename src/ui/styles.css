@@ -584,3 +584,79 @@
 
 /* A subtle running badge so it's clear the game is playing itself. */
 .ilm-root.is-demo .ilm-board { cursor: default; }
+
+/* ---- Magnetic Hook + Boss bar --------------------------------------- */
+
+.ilm-stat--hook {
+  appearance: none;
+  border: 1px solid var(--tile-edge);
+  background: color-mix(in srgb, var(--energy) 8%, transparent);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+.ilm-stat--hook:disabled { opacity: 0.4; cursor: default; }
+.ilm-stat--hook[aria-pressed='true'] {
+  border-color: var(--energy);
+  background: color-mix(in srgb, var(--energy) 22%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--energy) 40%, transparent);
+}
+
+/* While targeting a hook pull, dim the board and spotlight armed mines. */
+.ilm-root.hook-mode .ilm-board { cursor: crosshair; }
+.ilm-root.hook-mode .ilm-tile.is-armed {
+  outline: 2px solid var(--energy);
+  outline-offset: -2px;
+  animation: ilm-pulse 0.9s ease-in-out infinite;
+}
+
+.ilm-hookmark {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--energy);
+  text-shadow: 0 0 5px var(--energy);
+  pointer-events: none;
+}
+.ilm-tile.is-hook { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--energy) 55%, transparent); }
+
+.ilm-bossbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ilm-bossbar[hidden] { display: none; }
+.ilm-bossbar__label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--enemy-boss, #ff5bd0);
+}
+.ilm-bossbar__track {
+  flex: 1;
+  height: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--enemy-boss, #ff5bd0) 15%, #0b1622);
+  overflow: hidden;
+}
+.ilm-bossbar__fill {
+  height: 100%;
+  width: var(--boss-pct, 100%);
+  background: linear-gradient(90deg, #ff5bd0, #ff9be6);
+  box-shadow: 0 0 10px var(--enemy-boss, #ff5bd0);
+  transition: width 220ms ease;
+}
+.ilm-bossbar__hp {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  min-width: 42px;
+  text-align: right;
+}
+
+.ilm-stats .ilm-stat--hook { justify-self: end; align-items: flex-end; text-align: right; }

@@ -142,7 +142,8 @@ function main(): void {
     if (greedy.finishedPct < 0.98) {
       flags.push(`⚠ ${d}: greedy finished only ${Math.round(greedy.finishedPct * 100)}% — some boards can't be completed (mine supply near centre?)`)
     }
-    if (greedy.medTime >= prober.medTime) {
+    // Skill is rewarded if blind play mostly can't finish, or finishes slower than greedy.
+    if (prober.finishedPct > 0.5 && greedy.medTime >= prober.medTime) {
       flags.push(`⚠ ${d}: greedy (${greedy.medTime}s) not faster than blindProber (${prober.medTime}s) — skill isn't rewarded`)
     }
   }

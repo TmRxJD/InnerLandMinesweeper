@@ -83,8 +83,14 @@ export class GameApp {
   private elChargeFill!: HTMLElement
   private elTime!: HTMLElement
   private elTimeStat!: HTMLElement
-  private elMoves!: HTMLElement
+  private elHookBtn!: HTMLButtonElement
+  private elHookCount!: HTMLElement
+  private elBossBar!: HTMLElement
+  private elBossFill!: HTMLElement
+  private elBossHp!: HTMLElement
   private elCoach!: HTMLElement
+  /** True while the player has armed the hook and the next armed-mine click will pull it. */
+  private hookMode = false
   private helpDialog!: HTMLElement
 
   private width = 0
@@ -123,7 +129,11 @@ export class GameApp {
     this.elChargeFill = root.querySelector('.ilm-chargebar__fill')!
     this.elTime = root.querySelector('[data-time]')!
     this.elTimeStat = root.querySelector('.ilm-stat--time')!
-    this.elMoves = root.querySelector('[data-moves]')!
+    this.elHookBtn = root.querySelector('[data-hook]')!
+    this.elHookCount = root.querySelector('[data-hookcount]')!
+    this.elBossBar = root.querySelector('[data-bossbar]')!
+    this.elBossFill = root.querySelector('[data-bossfill]')!
+    this.elBossHp = root.querySelector('[data-bosshp]')!
     this.elCoach = root.querySelector('[data-coach]')!
     this.helpDialog = root.querySelector('[data-help-dialog]')!
 
@@ -169,10 +179,15 @@ export class GameApp {
             <span class="ilm-stat__label">Time</span>
             <span class="ilm-stat__value" data-time>0:00</span>
           </div>
-          <div class="ilm-stat ilm-stat--moves">
-            <span class="ilm-stat__label">Moves</span>
-            <span class="ilm-stat__value" data-moves>0</span>
-          </div>
+          <button class="ilm-stat ilm-stat--hook" data-hook type="button" aria-pressed="false" disabled>
+            <span class="ilm-stat__label">Hook</span>
+            <span class="ilm-stat__value" data-hookcount>0</span>
+          </button>
+        </div>
+        <div class="ilm-bossbar" data-bossbar hidden>
+          <span class="ilm-bossbar__label">Boss</span>
+          <div class="ilm-bossbar__track"><div class="ilm-bossbar__fill" data-bossfill></div></div>
+          <span class="ilm-bossbar__hp" data-bosshp></span>
         </div>
         <div class="ilm-controls">
           <select class="ilm-select" data-difficulty aria-label="Difficulty">${opts}</select>
@@ -264,6 +279,9 @@ export class GameApp {
     this.root.querySelector('[data-demo]')!.addEventListener('click', () => this.toggleDemo())
     this.root.querySelector('[data-hints]')!.addEventListener('click', () => this.toggleHints())
     this.root.querySelector('[data-help]')!.addEventListener('click', () => this.openHelp())
+    this.elHookBtn.addEventListener('click', () => {
+      if (this.engine.snapshot().hookCharges > 0) this.setHookMode(!this.hookMode)
+    })
     this.root.querySelectorAll('[data-help-close]').forEach(el => {
       el.addEventListener('click', () => this.closeHelp())
     })
@@ -379,9 +397,19 @@ export class GameApp {
     if (!tile) return
 
     if (tile.state === 'armed') {
+      // In hook-mode, clicking an armed mine pulls it toward the boss (crushing what's in the
+      // way) instead of detonating; leave hook-mode afterward.
+      if (this.hookMode) {
+        const events = this.engine.useHook(coord)
+        this.setHookMode(false)
+        this.apply(events)
+        return
+      }
       this.apply(this.engine.detonate(coord))
       return
     }
+    // A click anywhere that isn't an armed mine cancels a pending hook.
+    if (this.hookMode) this.setHookMode(false)
     if (tile.state !== 'covered' && tile.state !== 'cracked') return
     // Tapping a tough tile chips it slowly (engine caps hand-tap damage); a blast is faster.
 
@@ -461,6 +489,14 @@ export class GameApp {
     this.pulseTile(coord, 'charge-up')
   }
 
+  /** Enter/leave hook-targeting: the board highlights armed mines and the next one clicked is
+   *  pulled toward the boss. */
+  private setHookMode(on: boolean): void {
+    this.hookMode = on && this.engine.snapshot().hookCharges > 0
+    this.root.classList.toggle('hook-mode', this.hookMode)
+    this.elHookBtn.setAttribute('aria-pressed', String(this.hookMode))
+  }
+
   private render(snap: BoardSnapshot): void {
     for (let i = 0; i < snap.tiles.length; i++) {
       this.renderTile(this.tiles[i]!, snap.tiles[i]!)
@@ -470,7 +506,16 @@ export class GameApp {
     const pct = Math.max(0, Math.min(100, (snap.playerCharge / maxCharge) * 100))
     this.elChargeFill.style.setProperty('--charge-pct', `${pct}%`)
     this.elTime.textContent = this.fmtTime(snap.timeElapsed)
-    this.elMoves.textContent = String(snap.moves)
+    // Hook stat: count + enabled only when a charge is held; drop hook-mode if we run dry.
+    this.elHookCount.textContent = String(snap.hookCharges)
+    this.elHookBtn.disabled = snap.hookCharges < 1
+    if (snap.hookCharges < 1 && this.hookMode) this.setHookMode(false)
+    this.elHookBtn.setAttribute('aria-pressed', String(this.hookMode))
+    // Boss bar: show once the boss has taken a hit (it's covered/full at first).
+    const bossPct = snap.bossMaxHp > 0 ? (snap.bossHp / snap.bossMaxHp) * 100 : 0
+    this.elBossBar.hidden = snap.bossHp >= snap.bossMaxHp
+    this.elBossFill.style.setProperty('--boss-pct', `${bossPct}%`)
+    this.elBossHp.textContent = `${snap.bossHp}/${snap.bossMaxHp}`
     this.updateCoach(snap)
   }
 
@@ -532,8 +577,11 @@ export class GameApp {
       const crack = t.crack ?? 0
       if (t.state === 'cracked') el.style.setProperty('--crack', String(crack))
       const hp = Math.max(0, 1 - crack)
-      el.innerHTML = `${sprite}<span class="ilm-hp" style="--hp:${hp}"></span>`
-      label = t.state === 'cracked' ? `${cls} enemy, ${Math.round(hp * 100)}% health` : `${cls} enemy`
+      // A Magnetic Hook bonus sits on top of the enemy — a visible objective to route to.
+      const hook = t.isHook ? '<span class="ilm-hookmark" aria-hidden="true">⌇</span>' : ''
+      if (t.isHook) el.classList.add('is-hook')
+      el.innerHTML = `${sprite}<span class="ilm-hp" style="--hp:${hp}"></span>${hook}`
+      label = t.isHook ? `${cls} enemy with a Magnetic Hook` : t.state === 'cracked' ? `${cls} enemy, ${Math.round(hp * 100)}% health` : `${cls} enemy`
     }
     el.setAttribute('aria-label', label)
     // Preserve roving tabindex.

@@ -185,9 +185,11 @@ class Engine implements MinesweeperEngine {
   // -- ground clicks -------------------------------------------------------
 
   private clickGround(tile: Tile, events: GameEvent[]): void {
-    // A hand-tap costs 1 charge and deals 1 damage. A 1-HP enemy clears; the Boss only chips
-    // (the slow fallback — blasts are how you really kill it). Broke → the tap does nothing;
-    // wait for regen or detonate a mine. One tile per tap, no flood-fill.
+    // The Boss is immune to hand-taps — ONLY mine blasts hurt it. That's the whole game: build
+    // stacks and deliver them. Tapping the Boss does nothing (no charge spent).
+    if (tile.tier === 'boss') return
+    // A hand-tap costs 1 charge and deals 1 damage, clearing a 1-HP enemy. Broke → the tap does
+    // nothing; wait for regen or detonate a mine. One tile per tap, no flood-fill.
     if (this.playerCharge < 1) return
     this.setPlayerCharge(this.playerCharge - 1, events)
     tile.hp -= 1

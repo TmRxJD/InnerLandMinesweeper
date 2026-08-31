@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createEngine } from './engine'
 import { generateBoard, tileAt, type Board } from './board'
 import { DIFFICULTIES, blastRadiusForStack } from './tuning'
+import { autoPlay } from './auto-player'
 import type { Coord } from './types'
 
 const DIFF = 'gentle' as const
@@ -129,16 +130,14 @@ describe('tapping', () => {
     expect(engine.snapshot().playerCharge).toBe(before - 1)
   })
 
-  it('the Boss only chips when tapped (1 damage), and tapping costs no time', () => {
+  it('the Boss is immune to hand-taps — only blasts hurt it', () => {
     const engine = createEngine({ difficulty: DIFF, seed: 'boss-chip' })
     const cx = Math.floor(cfg.width / 2)
     const cy = Math.floor(cfg.height / 2)
-    const timeBefore = engine.snapshot().timeElapsed
     const events = engine.reveal({ x: cx, y: cy })
-    expect(events.some(e => e.kind === 'tileCracked')).toBe(true)
-    expect(engine.snapshot().timeElapsed).toBe(timeBefore)
-    expect(engine.snapshot().bossHp).toBe(cfg.bossHp - 1)
-    expect(engine.snapshot().playerCharge).toBe(cfg.startingCharge - 1)
+    expect(events).toEqual([]) // tapping the boss does nothing
+    expect(engine.snapshot().bossHp).toBe(cfg.bossHp) // undamaged
+    expect(engine.snapshot().playerCharge).toBe(cfg.startingCharge) // no charge spent
   })
 
   it('a broke tap does nothing', () => {
@@ -289,35 +288,22 @@ describe('no loss; win on full clear', () => {
     expect(engine.snapshot().timeElapsed).toBeGreaterThan(cfg.parSeconds)
   })
 
-  it('clearing every tile and the boss wins, with a time and a medal', () => {
-    // Brute-force a full clear cheaply: hand-tap every non-mine tile (regenerating charge),
-    // which also kills the boss (1 dmg/tap). Tick a little between taps to refill.
+  it('the reference bot clears the board and kills the blast-only boss, earning a medal', () => {
     const seed = 'win-seed'
-    const board = truth(seed)
     const engine = createEngine({ difficulty: DIFF, seed })
-    const nonMines = board.tiles.filter(t => !t.isMine)
     let guard = 0
-    while (engine.snapshot().status === 'playing' && guard++ < 20000) {
-      let acted = false
-      for (const t of nonMines) {
-        const v = engine.snapshot().tiles.find(s => s.coord.x === t.x && s.coord.y === t.y)!
-        if ((v.state === 'covered' || v.state === 'cracked') && engine.snapshot().playerCharge >= 1) {
-          engine.reveal({ x: t.x, y: t.y })
-          acted = true
-        }
+    while (engine.snapshot().status === 'playing' && guard++ < 8000) {
+      const action = autoPlay(engine.snapshot())
+      if (action) {
+        if (action.type === 'reveal') engine.reveal(action.coord)
+        else engine.detonate(action.coord)
       }
-      // arm+detonate any remaining covered mines so they don't block the win
-      for (const t of board.tiles.filter(m => m.isMine)) {
-        const v = engine.snapshot().tiles.find(s => s.coord.x === t.x && s.coord.y === t.y)!
-        if (v.state === 'covered') { engine.reveal({ x: t.x, y: t.y }); acted = true }
-      }
-      engine.tick(2) // regen
-      if (!acted && engine.snapshot().playerCharge >= 1) break
+      engine.tick(1) // regen + clock
     }
     const result = engine.result()
     expect(engine.snapshot().status).toBe('won')
-    expect(result).not.toBeNull()
     expect(result!.outcome).toBe('won')
+    expect(engine.snapshot().bossHp).toBe(0) // the boss died to blasts, not taps
     expect(result!.timeSeconds).toBeGreaterThan(0)
     expect(['gold', 'silver', 'bronze', 'none']).toContain(result!.medal)
   })
