@@ -152,7 +152,7 @@ export class GameApp {
     return `
       <header class="ilm-header">
         <div class="ilm-title">
-          <img class="ilm-title__mark" src="${mineUrl}" alt="" aria-hidden="true" draggable="false">
+          <span class="ilm-title__mark" style="--sprite:url(${mineUrl})" aria-hidden="true"></span>
           <span class="ilm-title__text">Inner Land Minesweeper</span>
         </div>
         <button class="ilm-iconbtn" data-help aria-label="How to play" title="How to play">?</button>
@@ -219,7 +219,7 @@ export class GameApp {
               slowly — see below.</div>
           </div>
           <div class="ilm-help__row">
-            <span class="ilm-help__icon"><img src="${mineUrl}" alt="" class="ilm-help__sprite"></span>
+            <span class="ilm-help__icon"><span class="ilm-help__sprite" style="--sprite:url(${mineUrl})"></span></span>
             <div><b>Find a mine → it arms.</b> A mine you click doesn't kill you — it uncovers as a
               glowing <b>Inner Land Mine</b>. <b>Click it to detonate:</b> it blasts a hole in the
               board and refills your charge. Its ring brightens and shifts colour as its charge grows.</div>
@@ -520,7 +520,7 @@ export class GameApp {
       el.style.setProperty('--charge', String(Math.min(1, charge / 6)))
       el.style.setProperty('--charge-color', chargeColor(charge))
       el.innerHTML =
-        `<span class="ilm-orb"><img class="ilm-mine-img" src="${mineUrl}" alt="" draggable="false">` +
+        `<span class="ilm-orb"><span class="ilm-mine-glyph" style="--sprite:url(${mineUrl})"></span>` +
         `<span class="ilm-orb__mult">${charge}×</span></span>`
       label = `armed Inner Land Mine, charge ${charge} times`
     } else if (t.state === 'detonated') {

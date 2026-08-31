@@ -88,8 +88,10 @@
 .ilm-title__mark {
   width: 24px;
   height: 24px;
-  object-fit: contain;
   flex: none;
+  -webkit-mask: var(--sprite) center / contain no-repeat;
+  mask: var(--sprite) center / contain no-repeat;
+  background: var(--energy);
   filter: drop-shadow(0 0 6px var(--energy));
 }
 .ilm-title__text {
@@ -271,7 +273,12 @@
   border: 1px solid var(--tile-edge);
 }
 .ilm-help__icon--ground { color: var(--n3); }
-.ilm-help__sprite { width: 24px; height: 24px; object-fit: contain; }
+.ilm-help__sprite {
+  width: 24px; height: 24px;
+  -webkit-mask: var(--sprite) center / contain no-repeat;
+  mask: var(--sprite) center / contain no-repeat;
+  background: var(--energy);
+}
 .ilm-help__swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 30px; }
 .ilm-help__swatches i { width: 100%; aspect-ratio: 1; border-radius: 3px; display: block; }
 .ilm-help__icon--flag { color: var(--energy); }
@@ -429,10 +436,15 @@
   animation: ilm-pulse 1.8s ease-in-out infinite;
 }
 .reduce-motion .ilm-orb { animation: none; }
-.ilm-mine-img {
+/* The mine sprite is masked and filled with the charge colour (not drawn as a raw <img>),
+   so it reads as a clean glowing glyph that ramps colour with charge — and drops the opaque
+   background box baked into the source art. */
+.ilm-mine-glyph {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  -webkit-mask: var(--sprite) center / contain no-repeat;
+  mask: var(--sprite) center / contain no-repeat;
+  background: var(--charge-color, var(--energy));
   filter: drop-shadow(0 0 5px var(--charge-color, var(--energy)));
   pointer-events: none;
 }
