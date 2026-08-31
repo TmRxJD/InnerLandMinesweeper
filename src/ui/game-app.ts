@@ -223,43 +223,43 @@ export class GameApp {
         <div class="ilm-help__card">
           <button class="ilm-iconbtn ilm-help__close" data-help-close aria-label="Close">×</button>
           <h2 class="ilm-help__title">How to play</h2>
-          <p class="ilm-help__lead">You're a mine <em>sweeper</em>. Finding a mine is good — mines are
-            your weapons. Clear every ground tile before time runs out.</p>
+          <p class="ilm-help__lead">Finding a mine is good — mines are your weapons. Clear the field
+            from the corner inward, build big mine stacks near the centre, and blast the <em>Boss</em>.
+            The clock is your score, not your enemy — finish fast.</p>
 
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--ground">3</span>
-            <div><b>Tap enemies.</b> Click a grey Common to clear it and reveal a number — how many
-              mines touch it, like classic Minesweeper. Tapping costs <b>charge</b>, which regenerates
-              over time up to a cap (shown in the HUD). Tough enemies can be tapped too, but only chip
-              slowly — see below.</div>
+            <div><b>Tap to clear.</b> Every field tile is a 1-HP enemy — one tap clears it and reveals
+              a number: how many mines touch it, like classic Minesweeper. Tapping costs <b>charge</b>
+              (it regenerates), so tap to find mines and open lanes — let blasts do the bulk clearing.
+              Colours are just enemy variety.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><span class="ilm-help__sprite" style="--sprite:url(${mineUrl})"></span></span>
-            <div><b>Find a mine → it arms.</b> A mine you click doesn't kill you — it uncovers as a
-              glowing <b>Inner Land Mine</b>. <b>Click it to detonate:</b> it blasts a hole in the
-              board and refills your charge. Its ring brightens and shifts colour as its charge grows.</div>
+            <div><b>Mines are weapons.</b> Tap a hidden mine and it <b>arms</b> (safe). Tap an armed
+              mine to <b>detonate</b> — a square blast clears everything in it for free. A mine's
+              <b>stack</b> (the <code>N×</code> badge) sets both its damage and its blast size, and
+              <b>overlapping detonations pump nearby mines' stacks</b>. So detonate outward and grow
+              huge stacks on the mines nearest the centre.</div>
           </div>
           <div class="ilm-help__row">
-            <span class="ilm-help__swatches" aria-hidden="true">
-              <i style="background:var(--enemy-common)"></i><i style="background:var(--enemy-advanced)"></i><i style="background:var(--enemy-elite)"></i><i style="background:var(--enemy-fleet)"></i>
-            </span>
-            <div><b>Enemies by colour.</b>
-              <b style="color:var(--enemy-common)">Common (grey)</b> is the only kind you can tap to
-              kill. <b style="color:var(--enemy-advanced)">Advanced (yellow)</b>,
-              <b style="color:var(--enemy-elite)">Elite (blue)</b> and
-              <b style="color:var(--enemy-fleet)">Fleet (red)</b> can be tapped too, but each tap
-              only chips a sliver of their HP — a <b>mine blast</b> clears them far faster. Their
-              health bar shows the damage.</div>
+            <span class="ilm-help__icon" style="color:var(--energy)">⌇</span>
+            <div><b>Magnetic Hook.</b> Clear a marked <b style="color:var(--energy)">Hook tile</b> (cyan
+              outline) to earn a charge — shown in the HUD. <b>Right-click</b> (or <b>long-press</b>) an
+              armed mine to pull it one tile toward the Boss, crushing whatever's in the way. It's how
+              you deliver a big stack the last step to the centre.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
-            <div><b>The Boss</b> sits at the centre — far tougher than anything else, and the one
-              tough enemy you <em>can</em> tap. Grind it down over the end-game (blasts help too).</div>
+            <div><b>The Boss</b> sits at the centre — the only multi-hit enemy, and <b>only mine blasts
+              hurt it</b> (taps do nothing). Build charged mines and detonate them next to it; a bigger
+              stack reaches further. Its HP bar shows at the top of the board.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--flag">✓</span>
-            <div><b>Win</b> by clearing every ground tile. <b>Lose</b> only if the timer runs out —
-              take your time and deduce.</div>
+            <div><b>Win</b> by clearing the field and killing the Boss. There's <b>no losing</b> — the
+              timer counts up and <b>is your score</b>. Beat the thresholds for
+              <b style="color:#ffd23f">gold</b> / silver / bronze.</div>
           </div>
 
           <p class="ilm-help__keys">Keyboard: arrow keys move · Enter / Space acts on the focused
@@ -540,14 +540,19 @@ export class GameApp {
     }
     const armed = snap.tiles.some(t => t.state === 'armed')
     const cleared = snap.tiles.some(t => t.state === 'cleared')
+    const bossHurt = snap.bossHp < snap.bossMaxHp
 
     let msg: string
     if (!cleared && !armed) {
-      msg = 'Tap grey Commons to clear them and reveal numbers. A mine arms as a glowing orb.'
+      msg = 'Tap tiles to clear the field and find mines — a mine arms as a glowing orb.'
+    } else if (snap.hookCharges > 0 && armed) {
+      msg = `You hold ${snap.hookCharges} Magnetic Hook — right-click (or long-press) an armed mine to pull it toward the Boss.`
+    } else if (bossHurt && armed) {
+      msg = 'Deliver charged mine blasts to the centre — only blasts hurt the Boss.'
     } else if (armed) {
-      msg = 'Click a glowing mine to detonate it — a blast clears tough enemies far faster than tapping.'
+      msg = 'Detonate mines to clear ground and pump nearby mines’ stacks. Grow big stacks toward the centre.'
     } else {
-      msg = 'Tap Commons to clear; tougher enemies (yellow/blue/red) need a mine blast to kill.'
+      msg = 'Tap to open lanes and uncover mines; blasts clear far faster than tapping.'
     }
     this.elCoach.textContent = msg
   }

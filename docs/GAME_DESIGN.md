@@ -139,13 +139,16 @@ tab-hide, so nobody's time is ruined by a phone call.)
 Odd squares, so the Boss sits at a true centre. Every board is **seeded and deterministic** (same
 seed → same board), which powers the CLI, the harness, and any future daily board.
 
-| Difficulty | Size | Mines | Hooks | Boss HP | Par | Gold / Silver / Bronze |
-|---|---|---|---|---|---|---|
-| **Easy** (`gentle`) | 13×13 | 24 | 8 | 18 | 1:15 | ≤0:48 / ≤1:00 / ≤1:15 |
-| **Standard** | 17×17 | 40 | 13 | 28 | 2:10 | ≤1:20 / ≤1:45 / ≤2:10 |
-| **Hard** | 21×21 | 62 | 20 | 40 | 3:20 | ≤2:00 / ≤2:40 / ≤3:20 |
+| Difficulty | Size | Mines | Hooks | Boss HP | Stack cap | Max charge | Regen | Par | Gold / Silver / Bronze |
+|---|---|---|---|---|---|---|---|---|---|
+| **Easy** (`gentle`) | 13×13 | 24 | 8 | 18 | 6 | 12 | 1.0/s | 1:15 | ≤0:48 / ≤1:00 / ≤1:15 |
+| **Standard** | 17×17 | 40 | 13 | 28 | 7 | 14 | 1.1/s | 2:10 | ≤1:28 / ≤1:48 / ≤2:10 |
+| **Hard** | 21×21 | 62 | 20 | 40 | 8 | 16 | 1.2/s | 2:55 | ≤2:02 / ≤2:25 / ≤2:55 |
 
-Shared: stack cap 6, blast-radius cap 3, per-tap 1 charge, charge regen ~1/s. Generation guarantees:
+The **caps scale with difficulty** — a harder board gives bigger max stacks and a bigger charge
+pool (its bigger Boss and field need them). Blast-radius cap is 3 everywhere (a consistent blast
+size), a tap always costs 1 charge, mines are ~14% of the field, and hooks are ~⅓ of the mine
+count. Generation guarantees:
 the **opening is a corner** (zero adjacent mines, safe first tap — routes play inward); the **Boss is
 pinned to centre and never a mine**; a **dense mine ring around the Boss** (Chebyshev ≤ 2) keeps it
 killable; and **Magnetic Hook tiles only in the outer rings**.
@@ -187,9 +190,9 @@ the engine knows nothing about the host.
 ## Balance status
 
 Reference-bot (a reasonable, hook-using player) over the headless sim: **finishes 100%** of boards on
-every difficulty, median clear ~**58 / 101 / 137 s**, earning mostly silver/bronze (a skilled human
-golds). The **blind-prober finishes 0%** — ignoring the mine economy can't kill a blast-only Boss —
-so skill is strongly rewarded. No balance flags.
+every difficulty, median clear ~**58 / 99 / 135 s**, spread across gold/silver/bronze (a skilled human
+golds more often). The **blind-prober finishes 0%** — ignoring the mine economy can't kill a blast-only
+Boss — so skill is strongly rewarded. No balance flags.
 
 ## Open questions
 
