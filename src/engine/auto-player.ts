@@ -141,6 +141,47 @@ function chainStarter(near: TileView[], boss: Coord, snap: BoardSnapshot): TileV
   return best
 }
 
+/** Simulate the greedy chain (same order as chainStarter) on the near mines AS THEY ARE and return
+ *  the total damage it would deal to the Boss. Mirrors the engine: radius+1 charge/boss reach and
+ *  the stack cap. Used to decide whether the mines already kill the Boss where they sit — if so, the
+ *  bot skips gathering (hooks would only cost time). If not, it hooks to tighten the cluster. This is
+ *  what makes hooks pay for themselves: they're spent only when the spread chain falls short. */
+function predictChainDamage(near: TileView[], boss: Coord, snap: BoardSnapshot): number {
+  const sim = near.map(m => ({ x: m.coord.x, y: m.coord.y, s: m.mineCharge ?? 1, alive: true }))
+  const ch = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))
+  let dmg = 0
+  for (;;) {
+    let bi = -1
+    let bs = -Infinity
+    for (let i = 0; i < sim.length; i++) {
+      const m = sim[i]!
+      if (!m.alive) continue
+      const r = blastRadiusForStack(m.s, snap.blastRadiusCap)
+      let sc = ch(m, boss) <= r + 1 ? m.s : 0
+      for (let j = 0; j < sim.length; j++) {
+        const o = sim[j]!
+        if (j === i || !o.alive) continue
+        sc += Math.min(snap.stackCap, o.s + (ch(m, o) <= r + 1 ? 1 : 0))
+      }
+      if (sc > bs) {
+        bs = sc
+        bi = i
+      }
+    }
+    if (bi < 0) break
+    const m = sim[bi]!
+    const r = blastRadiusForStack(m.s, snap.blastRadiusCap)
+    if (ch(m, boss) <= r + 1) dmg += m.s
+    for (let j = 0; j < sim.length; j++) {
+      const o = sim[j]!
+      if (j === bi || !o.alive) continue
+      if (ch(m, o) <= r + 1) o.s = Math.min(snap.stackCap, o.s + 1)
+    }
+    m.alive = false
+  }
+  return dmg
+}
+
 function hasRevealedNeighbour(t: TileView, snap: BoardSnapshot, w: number): boolean {
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
@@ -163,8 +204,17 @@ function hasRevealedNeighbour(t: TileView, snap: BoardSnapshot, w: number): bool
  *      them, so this is the earned skill the board is built around.
  *   3. CHAIN — detonate the packed blob in escalating order (cheap chargers first) so it self-
  *      charges past the Boss's HP.
+ *
+ * `opts.useHooks` (default true) toggles phase 2. With it off the bot never hooks — it just chains
+ * the mines where they spawned. That is not a real strategy so much as a MEASURING TOOL: running the
+ * same player with hooks on vs off tells the balance harness how hook-dependent each difficulty is.
  */
-export function autoPlay(snap: BoardSnapshot): AutoAction | null {
+export interface AutoPlayOptions {
+  readonly useHooks?: boolean
+}
+
+export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoAction | null {
+  const useHooks = opts.useHooks ?? true
   if (snap.status !== 'playing') return null
   const mines = armedMines(snap)
   const boss = bossCoord(snap)
@@ -193,8 +243,13 @@ export function autoPlay(snap: BoardSnapshot): AutoAction | null {
 
   // === Field is clear. Phases 2 & 3: gather the near mines into a blob, then chain it. ===
   if (bossAlive && near.length > 0) {
-    const gather = gatherMove(near, boss, snap) // Phase 2: pack
-    if (gather) return gather
+    // Only gather when the mines can't already finish the Boss where they sit — hooking a spread
+    // that would win anyway just burns clock (and drops your medal). When the spread chain falls
+    // short, tighten it one hook at a time until it's lethal, then chain.
+    if (useHooks && predictChainDamage(near, boss, snap) < snap.bossHp) {
+      const gather = gatherMove(near, boss, snap) // Phase 2: pack
+      if (gather) return gather
+    }
     const starter = chainStarter(near, boss, snap) // Phase 3: escalating detonation
     if (starter) return { type: 'detonate', coord: starter.coord }
   }

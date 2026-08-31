@@ -37,6 +37,7 @@ export interface RunOutcome {
   finished: boolean
   timeSeconds: number
   moves: number
+  hooksUsed: number
   result: GameResult | null
 }
 
@@ -45,13 +46,17 @@ export function runGame(difficulty: Difficulty, seed: string, bot: Bot): RunOutc
   let stuck = 0
   let lastSig = ''
   let elapsed = 0
+  let hooksUsed = 0
   for (let i = 0; i < MAX_ACTIONS; i++) {
     const snap = engine.snapshot()
     if (snap.status !== 'playing') break
     const action = bot.step(snap)
     if (action) {
       if (action.type === 'reveal') engine.reveal(action.coord)
-      else if (action.type === 'hook') engine.useHook(action.coord, action.dir ?? { x: 0, y: 0 })
+      else if (action.type === 'hook') {
+        const events = engine.useHook(action.coord, action.dir ?? { x: 0, y: 0 })
+        if (events.some(e => e.kind === 'hookUsed')) hooksUsed += 1
+      }
       else engine.detonate(action.coord)
     }
     engine.tick(SECONDS_PER_MOVE)
@@ -62,7 +67,7 @@ export function runGame(difficulty: Difficulty, seed: string, bot: Bot): RunOutc
     if (stuck >= 40) break // genuinely stuck (no regen, no useful move)
   }
   const result = engine.result()
-  return { finished: result !== null, timeSeconds: result?.timeSeconds ?? elapsed, moves: engine.snapshot().moves, result }
+  return { finished: result !== null, timeSeconds: result?.timeSeconds ?? elapsed, moves: engine.snapshot().moves, hooksUsed, result }
 }
 
 function median(xs: number[]): number {
@@ -80,6 +85,7 @@ interface Agg {
   fastest: number
   slowest: number
   medMoves: number
+  medHooks: number
   medals: { gold: number; silver: number; bronze: number; none: number }
 }
 
@@ -99,6 +105,7 @@ function sweep(difficulty: Difficulty, n: number): Agg[] {
       fastest: finished.length ? Math.min(...finished.map(r => r.timeSeconds)) : 0,
       slowest: finished.length ? Math.max(...finished.map(r => r.timeSeconds)) : 0,
       medMoves: median(runs.map(r => r.moves)),
+      medHooks: median(finished.map(r => r.hooksUsed)),
       medals,
     }
   })
@@ -109,7 +116,7 @@ function report(difficulty: Difficulty, aggs: Agg[]): void {
   console.log(
     `\n=== ${difficulty.toUpperCase()}  (${cfg.width}x${cfg.height}, ${cfg.mineCount} mines, boss ${cfg.bossHp}hp, par ${cfg.parSeconds}s) ===`,
   )
-  console.log(['bot'.padEnd(12), 'fin'.padStart(5), 'medTime'.padStart(8), 'fast'.padStart(6), 'slow'.padStart(6), 'moves'.padStart(6), 'medals(G/S/B/-)'.padStart(16)].join(' '))
+  console.log(['bot'.padEnd(12), 'fin'.padStart(5), 'medTime'.padStart(8), 'fast'.padStart(6), 'slow'.padStart(6), 'moves'.padStart(6), 'hooks'.padStart(6), 'medals(G/S/B/-)'.padStart(16)].join(' '))
   for (const a of aggs) {
     const m = a.medals
     console.log(
@@ -120,6 +127,7 @@ function report(difficulty: Difficulty, aggs: Agg[]): void {
         `${a.fastest}s`.padStart(6),
         `${a.slowest}s`.padStart(6),
         `${a.medMoves}`.padStart(6),
+        `${a.medHooks}`.padStart(6),
         `${m.gold}/${m.silver}/${m.bronze}/${m.none}`.padStart(16),
       ].join(' '),
     )

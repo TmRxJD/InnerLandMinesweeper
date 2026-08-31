@@ -37,6 +37,17 @@ export const greedyBot: Bot = {
 }
 
 /**
+ * The SAME reference player with hooks switched off — it chains the mines where they spawned and
+ * never gathers. Not a strategy anyone would choose; it is a measuring stick. Its finish-rate per
+ * difficulty is how hook-dependent that difficulty is: high on easy (hooks optional), low on hard
+ * (hooks required). It is deliberately a floor, so real no-hook play sits somewhere above it.
+ */
+export const noHookBot: Bot = {
+  name: 'noHook',
+  step: snap => autoPlay(snap, { useHooks: false }),
+}
+
+/**
  * The adversary. Ignores charge entirely: it blind-clicks every covered tile in order
  * (arming mines for free, chipping ground for time), detonating only to keep clicking.
  * If the escalating chip penalty is tuned right, this loses to the clock. If it wins or
@@ -57,4 +68,4 @@ export const blindProberBot: Bot = {
   },
 }
 
-export const ALL_BOTS: readonly Bot[] = [greedyBot, blindProberBot]
+export const ALL_BOTS: readonly Bot[] = [greedyBot, noHookBot, blindProberBot]

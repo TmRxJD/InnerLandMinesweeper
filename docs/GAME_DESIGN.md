@@ -210,12 +210,14 @@ difficulty (see Balance status), and the "blind prober" **completes 0%**.
 - **Headless CLI** (`pnpm play`) — ASCII board; `t`/`d`/`h` = tap / detonate / hook; `--debug`,
   `--moves`, `--auto` (`--n` for a speed sweep).
 - **Speed harness** (`pnpm harness`) — the board always completes, so the metric is **clear time**,
-  not win rate: median time + medal split per bot, flagging any board that can't finish or where
-  blind play isn't slower. The reference bot runs three phases — clear the field outward (sparing the
-  near-Boss killers), **gather** those killers into a tight blob with directional hooks, then **chain**
-  it in a one-ply-greedy order (measured against an offline beam search at ~95% of the optimal boss
-  delivery — far above the ~2.3× the mine count a naive "chargers first" order manages). It beats the
-  "blind prober", which can't kill the blast-only Boss at all.
+  not win rate: median time + medal split + **hooks used** per bot, flagging any board that can't
+  finish or where blind play isn't slower. The reference bot runs three phases — clear the field
+  outward (sparing the near-Boss killers), **gather** those killers with directional hooks *only when
+  a chain-damage prediction says the spread won't kill the Boss on its own*, then **chain** in a one-
+  ply-greedy order (measured against an offline beam search at ~95% of the optimal boss delivery). It
+  runs alongside two references: **`noHook`** — the same player with gathering switched off, whose
+  finish-rate measures how hook-dependent each difficulty is — and the **blind prober**, which can't
+  kill the blast-only Boss at all.
 - **Watch-demo** — the same reference bot plays the real UI hands-off.
 
 The game is a **standalone repo**, to be embedded in the Tower Run Tracker later via `GameResult` —
@@ -225,21 +227,29 @@ the engine knows nothing about the host.
 
 ## Balance status
 
-Reference-bot (a reasonable, hook-using player) over the headless sim: **finishes 100%** of boards on
-every difficulty, median clear ~**99 / 148 / 185 s**, landing mostly **silver** (a skilled human golds;
-sloppy play bronzes; the bot never fails to medal). The **blind-prober finishes 0%** — ignoring the
-mine economy can't kill a blast-only Boss, and with the killers spawning sparse and non-touching there
-is no cheese path — so skill is strongly rewarded. No balance flags.
+Reference bot (hooks used *only when needed*) over the headless sim — **finishes 100%** on every
+difficulty, median clear ~**96 / 130 / 160 s**, landing mostly **silver** with a spread to gold (fast
+runs) and bronze (slow); it never fails to medal. Hooks spent scale with difficulty and need, not
+habit: **median 0 / 0 / 3** (Easy / Standard / Hard) — on Easy the spread chain always wins so it
+never hooks, on Hard it hooks a few mines to make the chain lethal.
+
+The hook-reliance ramp is the point of the `killerMargin` dial. Measured by the `noHook` reference
+(same player, gathering off), **winnable without hooks: Easy 100% / Standard ~59% / Hard 0%** — hooks
+optional on Easy, needed on many Standard boards, effectively required on Hard (rare tightly-spawned
+seeds aside). The **blind prober finishes 0%** everywhere — no cheese path. No balance flags.
+
+So the shape is: the floor is hook-free on Easy, hooks are what win the hard boards *and* what shave
+time for a better medal — you never hook out of habit, only when it pays.
 
 ## Open questions
 
 Empirical — answered by play, not argument:
 
 - Does the **gather-then-chain** climax feel like *routing skill* or *busywork*? Levers: `gatherRadius`,
-  hook count, wedge width, Boss HP.
-- Are 14 / 22 / 32 Magnetic Hooks the right amount, and does crush-on-pull feel powerful-but-fair?
-- The gathering requirement pushed clears longer (Easy bot ~100 s vs the earlier ~60 s). Is that the
-  right feel, or should the field be smaller / hooks cheaper to bring it back down?
+  `killerMargin`, Boss HP.
+- Hooks are abundant (14 / 22 / 32 tiles) but the bot needs only a few — should hooks be *scarcer* so
+  managing them is part of the puzzle, or is plenty-on-tap the friendlier call?
+- Times settled at ~96 / 130 / 160 s. Right feel, or should the field shrink to speed Easy up?
 - Is the outward→inward route compelling, or should generation shape the field more?
 
 ---
