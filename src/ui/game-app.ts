@@ -187,7 +187,7 @@ export class GameApp {
             <span class="ilm-stat__value" data-time>0:00</span>
           </div>
           <div class="ilm-stat ilm-stat--hook">
-            <span class="ilm-stat__label">Hooks</span>
+            <span class="ilm-stat__label">Mag Hooks</span>
             <span class="ilm-stat__value" data-hookcount>0</span>
           </div>
         </div>
@@ -252,10 +252,10 @@ export class GameApp {
           <div class="ilm-help__row">
             <span class="ilm-help__icon" style="color:var(--energy)">⌇</span>
             <div><b>Magnetic Hook.</b> Some tiles hide a <b style="color:var(--energy)">Magnetic Hook</b> —
-              clear them and your <b>Hooks</b> count (in the HUD) ticks up. <b>Drag</b> an armed mine one
+              clear them and your <b>Mag Hooks</b> count (in the HUD) ticks up. <b>Drag</b> an armed mine one
               tile to pull it that way (crushing whatever's there), or <b>right-click</b> / <b>long-press</b>
-              to pull it toward the Boss. Gather mines together to build a bigger blast, and deliver stacks
-              to the centre.</div>
+              to pull it toward the Boss. You don't strictly need them on easy boards, but on tougher ones
+              gathering mines into a tighter cluster is how you build a big enough blast to crack the Boss.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>

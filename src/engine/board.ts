@@ -184,9 +184,10 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
       if (nx >= 0 && ny >= 0 && nx < width && ny < height && !reserved.has(i)) centreCells.push({ i, d: len })
     }
   }
-  // ≈√(2·HP) mines chain to exactly HP; +4 margin because packing is imperfect and a few mines get
-  // stranded a ring out. Placing them NEAREST-first minimises the hooks needed to pack them.
-  const minCentreMines = Math.min(centreCells.length, Math.ceil(Math.sqrt(2 * cfg.bossHp)) + 4)
+  // ≈√(2·HP) mines chain to exactly HP if perfectly packed; `killerMargin` on top is the per-
+  // difficulty hook-reliance dial (big on easy → a spread chain wins hook-free; ~1 on hard → only a
+  // hooked tight cluster reliably kills). Placing nearest-first keeps the wedge compact.
+  const minCentreMines = Math.min(centreCells.length, Math.ceil(Math.sqrt(2 * cfg.bossHp)) + cfg.killerMargin)
 
   // No two mines may spawn touching (Chebyshev-adjacent) — stacks are built only by hooking. Break
   // ties in the nearest-first order with the RNG so the wedge isn't a deterministic lattice.

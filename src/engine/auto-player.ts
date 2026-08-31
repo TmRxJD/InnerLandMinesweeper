@@ -122,7 +122,9 @@ function chainStarter(near: TileView[], boss: Coord, snap: BoardSnapshot): TileV
   let bestScore = -Infinity
   for (const m of near) {
     const r = blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap)
-    const immediate = cheb(m.coord, boss) <= r ? m.mineCharge ?? 1 : 0
+    // The Boss is chipped one ring beyond the blast too (engine's radius+1 rule): a mine only has
+    // to be adjacent to the Boss's tile — not on top of it — to deal its stack.
+    const immediate = cheb(m.coord, boss) <= r + 1 ? m.mineCharge ?? 1 : 0
     let potential = 0
     for (const o of near) {
       if (o === m) continue

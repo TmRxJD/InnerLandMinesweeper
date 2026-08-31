@@ -95,12 +95,25 @@ their whole square for free) do the bulk of the work.
 ## The Boss
 
 A single tile at the exact centre, and the only multi-hit enemy (HP **18 / 28 / 40** by difficulty).
-You kill it by **delivering blast damage** to the centre: detonate charged mines within reach of it.
-Because radius scales with stack, a well-charged mine can tag the Boss from a couple of tiles out —
-and the **Magnetic Hook** lets you walk a mine in the rest of the way.
+You kill it by **delivering blast damage** to the centre: detonate charged mines near it. Like every
+special tile, the Boss is hit when it merely **neighbours the blast** (radius **+1**), so a mine one
+empty tile away already chips it — you do **not** have to land a mine right against it. Radius also
+grows with stack, so a well-charged mine tags the Boss from further still.
 
-Generation guarantees a **dense ring of mines right around the Boss** (within 2 tiles), so it is
-always killable by blasts alone — you never need a hand-tap fallback (there isn't one).
+The killers spawn as a **sparse, non-touching wedge** near the Boss. How many of them (beyond the
+bare ≈√(2·HP) minimum) is the per-difficulty **hook-reliance dial** (`killerMargin`):
+
+- **Easy** — a generous margin, so even a **spread, un-hooked chain finishes the Boss**. Hooks are
+  optional; they just let you win faster / score better.
+- **Standard** — a smaller margin: many boards fall to a loose chain, but plenty need you to hook a
+  few mines together first.
+- **Hard** — near-minimal: the mines only chain to a kill once **hooked into a tight cluster**, so on
+  Hard the Magnetic Hook is effectively **required**.
+
+So the floor is hook-free on Easy and the ceiling always rewards hooks; difficulty is partly *how
+much the Boss forces you to route mines with hooks*. (There is no hand-tap fallback — the Boss is
+blast-only.) Empirically (headless, a deliberately weak no-hook player): Easy 100% / Standard ~68% /
+Hard 0% winnable without hooks, while the hook-using reference bot clears 100% everywhere.
 
 ---
 

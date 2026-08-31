@@ -52,6 +52,11 @@ export interface DifficultyConfig {
    *  inside it into the Boss-killing blob. Must be wide enough to hold ≈√(2·bossHp) non-adjacent
    *  mines; everything past it is field ordnance, spent only to clear ground. */
   readonly gatherRadius: number
+  /** How many killer mines beyond the bare ≈√(2·bossHp) minimum to spawn. This is the hook-reliance
+   *  dial: a big margin means even a SPREAD, un-hooked chain finishes the Boss (hooks optional —
+   *  easy); a small margin means the mines only chain to a kill once hooked into a tight cluster
+   *  (hooks effectively required — hard). */
+  readonly killerMargin: number
   /** Stack a mine gains each time it is caught inside another mine's blast (overlap charging). */
   readonly chargeGainPerOverlap: number
   /** Fraction of a detonated mine's stack that converts into the player's charge pool. */
@@ -88,6 +93,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     stackCap: 6,
     blastRadiusCap: 3,
     gatherRadius: 5,
+    killerMargin: 6, // easy: spread chain wins on its own, hooks optional
     chargeGainPerOverlap: 1,
     chargeConversion: 2,
     scoreDifficultyMultiplier: 1,
@@ -110,6 +116,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     stackCap: 7,
     blastRadiusCap: 3,
     gatherRadius: 6,
+    killerMargin: 3, // standard: hooks strongly help, needed on many boards
     chargeGainPerOverlap: 1,
     chargeConversion: 2,
     scoreDifficultyMultiplier: 1.6,
@@ -132,6 +139,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     stackCap: 8,
     blastRadiusCap: 3,
     gatherRadius: 7,
+    killerMargin: 1, // hard: near-minimal, only a hooked tight cluster reliably kills
     chargeGainPerOverlap: 1,
     chargeConversion: 2,
     scoreDifficultyMultiplier: 2.4,

@@ -113,22 +113,28 @@ class Engine implements MinesweeperEngine {
     // 3. Removing the mine decrements neighbours' live counts so numbers stay accurate.
     this.decrementAround(tile, events)
 
-    // 4a. Trigger nearby mines — one ring BEYOND the blast as well as inside it. A mine that merely
-    //     NEIGHBOURS a blast tile catches the overlap: a hidden one arms, an armed one gains charge.
-    //     This is what lets non-touching mines (they never spawn adjacent) pump each other's stacks
-    //     without first being hooked together — detonating next to a mine reaches it.
+    // 4a. Affect mines AND the Boss one ring BEYOND the blast, not just inside it. A mine or the
+    //     Boss that merely NEIGHBOURS a blast tile is hit: a hidden mine arms, an armed mine gains
+    //     charge, and the Boss (the only multi-hit tile) takes `stack` damage. This "touching the
+    //     blast is enough" rule is what lets you play WITHOUT hooks — non-touching mines pump each
+    //     other, and a mine with a single empty tile between it and the Boss still chips it. Hooks
+    //     then become a way to build tighter, bigger chains for a better score, not a requirement.
     for (const t of withinRadius(this.board, tile.x, tile.y, radius + 1)) {
-      if (!t.isMine) continue
-      if (t.state === 'covered') this.armMine(t, 'blast', events)
-      else if (t.state === 'armed') this.chargeMine(t, events)
+      if (t.isMine) {
+        if (t.state === 'covered') this.armMine(t, 'blast', events)
+        else if (t.state === 'armed') this.chargeMine(t, events)
+      } else if (t.tier === 'boss') {
+        t.hp -= stack
+        if (t.hp <= 0) this.destroyGroundTile(t, events)
+        else this.damageTile(t, events)
+      }
     }
 
-    // 4b. Apply blast damage — to GROUND only, and only within the true blast radius (the extra
-    //     ring above triggers mines but does not vaporise ground).
+    // 4b. Vaporise GROUND within the true blast radius (mines and the Boss are handled above at the
+    //     extended +1 reach; the extra ring does NOT vaporise plain 1-HP ground).
     for (const t of radiusTiles) {
-      if (t.isMine || t.state === 'cleared') continue
-      // Flat `stack` damage to every tile in the square. 1-HP enemies vaporise; the Boss (the
-      // only multi-hit tile) is chunked by `stack`.
+      if (t.isMine || t.tier === 'boss' || t.state === 'cleared') continue
+      // Flat `stack` damage; every non-boss tile is 1 HP so any blast vaporises it.
       t.hp -= stack
       if (t.hp <= 0) {
         // Vaporised by the blast: cleared, but its number is never revealed. Information

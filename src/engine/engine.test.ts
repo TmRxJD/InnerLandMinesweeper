@@ -216,6 +216,30 @@ describe('detonation', () => {
     throw new Error('no two-apart mine pair found')
   })
 
+  it('damages the Boss one ring BEYOND the blast — a mine a tile away chips it with no hook', () => {
+    // The Boss must take damage when it merely NEIGHBOURS a blast tile, or a mine with a single
+    // empty tile between it and the Boss (Chebyshev 2, blast radius 1) could never hit it and you'd
+    // be forced to hook. Find an armed mine exactly two cells from the Boss, detonate it, assert the
+    // Boss lost `stack` (=1) HP with no hook used.
+    const bx = Math.floor(cfg.width / 2)
+    const by = Math.floor(cfg.height / 2)
+    for (let i = 0; i < 400; i++) {
+      const seed = `boss-reach-${i}`
+      const board = truth(seed)
+      const mine = board.tiles.find(m => m.isMine && Math.max(Math.abs(m.x - bx), Math.abs(m.y - by)) === 2)
+      if (!mine) continue
+      const engine = createEngine({ difficulty: DIFF, seed })
+      engine.reveal({ x: mine.x, y: mine.y }) // arm it (stack 1 → radius 1)
+      expect(engine.snapshot().hookCharges).toBe(0)
+      const before = engine.snapshot().bossHp
+      engine.detonate({ x: mine.x, y: mine.y })
+      const after = engine.snapshot().bossHp
+      expect(after).toBe(before - 1) // radius-1 blast one tile short still chips the Boss
+      return
+    }
+    throw new Error('no mine two cells from the boss found')
+  })
+
   it('charges a mine one ring BEYOND the blast — non-touching mines pump each other without a hook', () => {
     // Mines never spawn adjacent, so at stack 1 (blast radius 1) a mine two cells away is one ring
     // outside the blast. The radius+1 trigger must still catch it, or stacks could only be built by

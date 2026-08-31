@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Inner Land Minesweeper</title>
     <style>
-      /* The game panel doesn't paint a full-bleed ground, so the host body must — otherwise the
-         host's card shows through the (transparent) iframe as a white surround. Use the game's own
-         dark ground so the embed is self-consistent in any host theme. */
-      html, body { margin: 0; min-height: 100%; background: #05070c; }
-      /* Fill the width the host gives us and let the game measure a real available width. The host
-         sizes the iframe height from our posted content height. */
-      body { padding: 8px 6px; }
+      /* Transparent ground: the game's own panel (.ilm-root) paints its dark card, so leaving the
+         body transparent lets the HOST site's chosen background show through around it instead of a
+         black canvas. The host must also keep its frame transparent for this to reach the page. */
+      html, body { margin: 0; min-height: 100%; background: transparent; }
+      /* Let the game measure a real available width. The host sizes the iframe height from our
+         posted content height. */
+      body { padding: 0; }
       #app { width: 100%; max-width: 720px; margin: 0 auto; }
     </style>
   </head>
