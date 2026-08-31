@@ -47,7 +47,6 @@ class Engine implements MinesweeperEngine {
   private regenAccum = 0
   private maxChain = 0
   private tilesCleared = 0
-  private readonly groundTotal: number
   private finalResult: GameResult | null = null
 
   constructor(opts: EngineOptions) {
@@ -57,7 +56,6 @@ class Engine implements MinesweeperEngine {
     this.revealHooks = opts.revealHooks ?? false
     this.board = generateBoard(this.cfg, opts.seed)
     this.playerCharge = this.cfg.startingCharge
-    this.groundTotal = this.board.tiles.filter(t => !t.isMine).length
   }
 
   // -- public surface ------------------------------------------------------

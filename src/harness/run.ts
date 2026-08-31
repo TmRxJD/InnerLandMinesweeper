@@ -11,6 +11,7 @@
  * within the action cap are flagged (bad mine supply near the centre).
  */
 
+import { pathToFileURL } from 'node:url'
 import { createEngine } from '../engine/engine'
 import { DIFFICULTIES, medalForTime } from '../engine/tuning'
 import type { Difficulty, GameResult } from '../engine/types'
@@ -161,4 +162,6 @@ function main(): void {
   else for (const f of flags) console.log(f)
 }
 
-main()
+// Only sweep when run directly (`tsx src/harness/run.ts`), so `runGame` can be imported without
+// kicking off a full sweep as a side effect.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()

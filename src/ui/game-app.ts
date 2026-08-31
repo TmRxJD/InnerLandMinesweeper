@@ -87,7 +87,6 @@ export class GameApp {
   private elCharge!: HTMLElement
   private elChargeFill!: HTMLElement
   private elTime!: HTMLElement
-  private elTimeStat!: HTMLElement
   private elHookCount!: HTMLElement
   private elBossBar!: HTMLElement
   private elBossFill!: HTMLElement
@@ -136,7 +135,6 @@ export class GameApp {
     this.elCharge = root.querySelector('[data-charge]')!
     this.elChargeFill = root.querySelector('.ilm-chargebar__fill')!
     this.elTime = root.querySelector('[data-time]')!
-    this.elTimeStat = root.querySelector('.ilm-stat--time')!
     this.elHookCount = root.querySelector('[data-hookcount]')!
     this.elBossBar = root.querySelector('[data-bossbar]')!
     this.elBossFill = root.querySelector('[data-bossfill]')!
