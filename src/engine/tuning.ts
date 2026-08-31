@@ -47,6 +47,11 @@ export interface DifficultyConfig {
   readonly stackCap: number
   /** Hard ceiling on blast radius (Chebyshev). Radius grows slowly with stack up to this. */
   readonly blastRadiusCap: number
+  /** Chebyshev radius around the Boss that defines the "near" zone: the wedge of killer mines
+   *  spawns entirely within it (nothing else does), and the player/bot gathers exactly the mines
+   *  inside it into the Boss-killing blob. Must be wide enough to hold ≈√(2·bossHp) non-adjacent
+   *  mines; everything past it is field ordnance, spent only to clear ground. */
+  readonly gatherRadius: number
   /** Stack a mine gains each time it is caught inside another mine's blast (overlap charging). */
   readonly chargeGainPerOverlap: number
   /** Fraction of a detonated mine's stack that converts into the player's charge pool. */
@@ -69,19 +74,20 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 13,
     height: 13,
     mineCount: 24, // ~14% of 169
-    hookCount: 8,
+    hookCount: 14,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
     bossHp: 18,
-    parSeconds: 75,
-    goldSeconds: 48,
-    silverSeconds: 60,
-    bronzeSeconds: 75,
+    parSeconds: 115,
+    goldSeconds: 85,
+    silverSeconds: 100,
+    bronzeSeconds: 115,
     startingCharge: 8,
     maxPlayerCharge: 12,
     chargeRegenPerSecond: 1.0,
     stackCap: 6,
     blastRadiusCap: 3,
+    gatherRadius: 5,
     chargeGainPerOverlap: 1,
     chargeConversion: 2,
     scoreDifficultyMultiplier: 1,
@@ -90,19 +96,20 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 17,
     height: 17,
     mineCount: 40, // ~14% of 289
-    hookCount: 13,
+    hookCount: 22,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
     bossHp: 28,
-    parSeconds: 130,
-    goldSeconds: 88,
-    silverSeconds: 108,
-    bronzeSeconds: 130,
+    parSeconds: 172,
+    goldSeconds: 132,
+    silverSeconds: 152,
+    bronzeSeconds: 172,
     startingCharge: 9,
     maxPlayerCharge: 14,
     chargeRegenPerSecond: 1.1,
     stackCap: 7,
     blastRadiusCap: 3,
+    gatherRadius: 6,
     chargeGainPerOverlap: 1,
     chargeConversion: 2,
     scoreDifficultyMultiplier: 1.6,
@@ -111,19 +118,20 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 21,
     height: 21,
     mineCount: 62, // ~14% of 441
-    hookCount: 20,
+    hookCount: 32,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
     bossHp: 40,
-    parSeconds: 175,
-    goldSeconds: 122,
-    silverSeconds: 145,
-    bronzeSeconds: 175,
+    parSeconds: 210,
+    goldSeconds: 168,
+    silverSeconds: 188,
+    bronzeSeconds: 210,
     startingCharge: 10,
     maxPlayerCharge: 16,
     chargeRegenPerSecond: 1.2,
     stackCap: 8,
     blastRadiusCap: 3,
+    gatherRadius: 7,
     chargeGainPerOverlap: 1,
     chargeConversion: 2,
     scoreDifficultyMultiplier: 2.4,

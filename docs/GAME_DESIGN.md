@@ -148,14 +148,25 @@ seed → same board), which powers the CLI, the harness, and any future daily bo
 
 The **caps scale with difficulty** — a harder board gives bigger max stacks and a bigger charge
 pool (its bigger Boss and field need them). Blast-radius cap is 3 everywhere (a consistent blast
-size), a tap always costs 1 charge, mines are ~14% of the field, and hooks are ~⅓ of the mine
-count. Generation guarantees:
-the **opening is a corner** (zero adjacent mines, safe first tap — routes play inward); the **Boss is
-pinned to centre and never a mine**; a **dense mine ring around the Boss** (Chebyshev ≤ 2) keeps it
-killable; and **Magnetic Hook tiles only in the outer rings**.
+size), a tap always costs 1 charge, and mines are ~14% of the field. Generation guarantees:
 
-> Note: medal/par times are currently calibrated against the reference bot in the headless sim; they
-> will be re-tuned against real wall-clock play. Easy is aimed at roughly a **60-second** clear.
+- the **opening is a corner** (zero adjacent mines, safe first tap — routes play inward);
+- the **Boss is pinned to centre and never a mine**;
+- **no two mines ever spawn touching** (Chebyshev-adjacent) — every stack is *built*, never found;
+- the **Boss-killing mines spawn as a sparse wedge** in the "near" zone (within `gatherRadius` of the
+  Boss, one side only, never inside the inner two rings), sized to ≈√(2·BossHP) + margin — the
+  minimum that can chain past the Boss's HP. Because they don't touch and aren't in range at rest,
+  **the only way to kill the Boss is to hook them into a tight blob and chain it** — no cheese path;
+- **field ordnance** (the rest of the mines) spawns strictly *outside* the near zone — ammunition for
+  clearing ground, never accidentally part of the kill cluster;
+- **Magnetic Hook tiles only in the outer rings**, so pulls are earned by clearing outward.
+
+This is verified solvable the only honest way: the reference bot **completes 100%** of boards on every
+difficulty (see Balance status), and the "blind prober" **completes 0%**.
+
+> Note: medal/par times are calibrated against the reference bot in the headless sim and will be
+> re-tuned against real wall-clock play. The gathering requirement makes clears longer than the
+> earlier no-gather model (Easy now ~100 s for the bot; a fast human should beat that).
 
 ---
 
@@ -179,8 +190,11 @@ killable; and **Magnetic Hook tiles only in the outer rings**.
   `--moves`, `--auto` (`--n` for a speed sweep).
 - **Speed harness** (`pnpm harness`) — the board always completes, so the metric is **clear time**,
   not win rate: median time + medal split per bot, flagging any board that can't finish or where
-  blind play isn't slower. The reference bot clears outward→inward, pumps inner stacks, **uses hooks
-  to deliver to the Boss**, and beats the "blind prober" (which can't kill the blast-only Boss at all).
+  blind play isn't slower. The reference bot runs three phases — clear the field outward (sparing the
+  near-Boss killers), **gather** those killers into a tight blob with directional hooks, then **chain**
+  it in a one-ply-greedy order (measured against an offline beam search at ~95% of the optimal boss
+  delivery — far above the ~2.3× the mine count a naive "chargers first" order manages). It beats the
+  "blind prober", which can't kill the blast-only Boss at all.
 - **Watch-demo** — the same reference bot plays the real UI hands-off.
 
 The game is a **standalone repo**, to be embedded in the Tower Run Tracker later via `GameResult` —
@@ -191,18 +205,20 @@ the engine knows nothing about the host.
 ## Balance status
 
 Reference-bot (a reasonable, hook-using player) over the headless sim: **finishes 100%** of boards on
-every difficulty, median clear ~**58 / 99 / 135 s**, spread across gold/silver/bronze (a skilled human
-golds more often). The **blind-prober finishes 0%** — ignoring the mine economy can't kill a blast-only
-Boss — so skill is strongly rewarded. No balance flags.
+every difficulty, median clear ~**99 / 148 / 185 s**, landing mostly **silver** (a skilled human golds;
+sloppy play bronzes; the bot never fails to medal). The **blind-prober finishes 0%** — ignoring the
+mine economy can't kill a blast-only Boss, and with the killers spawning sparse and non-touching there
+is no cheese path — so skill is strongly rewarded. No balance flags.
 
 ## Open questions
 
 Empirical — answered by play, not argument:
 
-- Does killing the blast-only Boss feel like a *climax* or a *chore*? Levers: Boss HP, ring density,
-  stack cap.
-- Are 8/13/20 Magnetic Hooks the right amount, and does crush-on-pull feel powerful-but-fair?
-- Are the medal/par times right once measured against real clicking (Easy ≈ 60 s)?
+- Does the **gather-then-chain** climax feel like *routing skill* or *busywork*? Levers: `gatherRadius`,
+  hook count, wedge width, Boss HP.
+- Are 14 / 22 / 32 Magnetic Hooks the right amount, and does crush-on-pull feel powerful-but-fair?
+- The gathering requirement pushed clears longer (Easy bot ~100 s vs the earlier ~60 s). Is that the
+  right feel, or should the field be smaller / hooks cheaper to bring it back down?
 - Is the outward→inward route compelling, or should generation shape the field more?
 
 ---

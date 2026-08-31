@@ -174,6 +174,7 @@ class Engine implements MinesweeperEngine {
       hookCharges: this.hookCharges,
       stackCap: this.cfg.stackCap,
       blastRadiusCap: this.cfg.blastRadiusCap,
+      gatherRadius: this.cfg.gatherRadius,
     }
   }
 

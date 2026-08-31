@@ -30,10 +30,6 @@ function cheb(a: Coord, b: Coord): number {
 function bossCoord(snap: BoardSnapshot): Coord {
   return { x: (snap.width - 1) / 2 | 0, y: (snap.height - 1) / 2 | 0 }
 }
-function reaches(mine: TileView, boss: Coord, snap: BoardSnapshot): boolean {
-  return blastRadiusForStack(mine.mineCharge ?? 1, snap.blastRadiusCap) >= cheb(mine.coord, boss)
-}
-
 /** How much covered ground a detonation would clear (its own value as a board-clearer). */
 function clearValue(mine: TileView, snap: BoardSnapshot): number {
   const radius = blastRadiusForStack(mine.mineCharge ?? 1, snap.blastRadiusCap)
@@ -57,19 +53,89 @@ function bestBy(mines: TileView[], score: (m: TileView) => number): TileView | n
   return best
 }
 
-/** The one-step direction to hook `mine` toward the Boss onto guaranteed-empty ground (so the
- *  charge is never wasted), or null if no such step. Tries the dominant axis, then the other. */
-function hookDirToward(mine: TileView, boss: Coord, snap: BoardSnapshot): Coord | null {
+/** A mine is "near" the Boss — a killer we gather into the blob — if it could reach the Boss with
+ *  a modest stack. Anything further is field ordnance, spent only to clear ground. */
+function isNear(mine: TileView, boss: Coord, snap: BoardSnapshot): boolean {
+  return cheb(mine.coord, boss) <= snap.gatherRadius
+}
+
+/** The one-step direction that pulls `mine` one Chebyshev ring closer to the Boss onto a cell that
+ *  isn't the Boss or another live mine, or null if it can't get closer (already Boss-adjacent, or
+ *  every inward cell is blocked). Prefers the diagonal (closes both axes), then an orthogonal, then
+ *  a diagonal *slide* that keeps the distance but rounds a blocker. This is the packing motion:
+ *  run every mine down the gradient toward the Boss and they pile into a tight blob on the ring. */
+function stepTowardBoss(mine: TileView, boss: Coord, snap: BoardSnapshot): Coord | null {
   const sx = Math.sign(boss.x - mine.coord.x)
   const sy = Math.sign(boss.y - mine.coord.y)
-  const xFirst = Math.abs(boss.x - mine.coord.x) >= Math.abs(boss.y - mine.coord.y)
-  const dirs = xFirst ? [{ x: sx, y: 0 }, { x: 0, y: sy }] : [{ x: 0, y: sy }, { x: sx, y: 0 }]
-  for (const d of dirs) {
+  const cur = cheb(mine.coord, boss)
+  if (cur <= 1) return null // already Boss-adjacent — as packed as it gets
+  const cands: Coord[] = []
+  if (sx && sy) cands.push({ x: sx, y: sy })
+  if (sx) cands.push({ x: sx, y: 0 })
+  if (sy) cands.push({ x: 0, y: sy })
+  // Sideways slides (same inward axis, either cross step) to get around a mine parked in front.
+  if (sx) cands.push({ x: sx, y: 1 }, { x: sx, y: -1 })
+  if (sy) cands.push({ x: 1, y: sy }, { x: -1, y: sy })
+  for (const d of cands) {
     if (!d.x && !d.y) continue
-    const t = snap.tiles[(mine.coord.y + d.y) * snap.width + (mine.coord.x + d.x)]
-    if (t && t.tier !== 'boss' && (t.state === 'cleared' || t.state === 'detonated' || t.state === 'cracked')) return d
+    const nx = mine.coord.x + d.x
+    const ny = mine.coord.y + d.y
+    const nc = Math.max(Math.abs(boss.x - nx), Math.abs(boss.y - ny))
+    if (nc < 1 || nc > cur) continue // never onto the Boss, never further out
+    const t = snap.tiles[ny * snap.width + nx]
+    if (!t || t.tier === 'boss' || t.state === 'armed') continue // blocked by Boss or a live mine
+    return d
   }
   return null
+}
+
+/** Pack step: hook the near mine that is *farthest* from the Boss one ring inward. Bringing outer
+ *  mines in first fills the Boss-adjacent cells and leaves a dense blob. Null when nothing can move
+ *  closer (fully packed) or there are no hooks left — either way it's time to chain. */
+function gatherMove(near: TileView[], boss: Coord, snap: BoardSnapshot): AutoAction | null {
+  if (snap.hookCharges < 1) return null
+  let best: { m: TileView; dir: Coord } | null = null
+  let bestD = 1
+  for (const m of near) {
+    const dir = stepTowardBoss(m, boss, snap)
+    if (!dir) continue
+    const d = cheb(m.coord, boss)
+    if (d > bestD || !best) {
+      best = { m, dir }
+      bestD = d
+    }
+  }
+  return best ? { type: 'hook', coord: best.m.coord, dir: best.dir } : null
+}
+
+/** Which packed mine to detonate next. This is the heart of the chain, and the order is what makes
+ *  or breaks the kill: a naive "spend chargers first" order delivers ~2.3× the mine count, but a
+ *  one-ply greedy on the RIGHT objective delivers ~5× — nearly the beam-searched optimum.
+ *
+ *  Objective: for each candidate, score = (boss damage it deals right now) + (total stack left on
+ *  the board afterwards). Maximising that jointly cashes in a mine while it is Boss-ready and keeps
+ *  the surviving blob as charged as possible — the greedy naturally fires out-of-range mines to pump
+ *  the core, then unloads the fattened core into the Boss. Verified in .scratch/sim.ts against a
+ *  beam search: 56/59 (standard), 63/66 (hard). */
+function chainStarter(near: TileView[], boss: Coord, snap: BoardSnapshot): TileView | null {
+  let best: TileView | null = null
+  let bestScore = -Infinity
+  for (const m of near) {
+    const r = blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap)
+    const immediate = cheb(m.coord, boss) <= r ? m.mineCharge ?? 1 : 0
+    let potential = 0
+    for (const o of near) {
+      if (o === m) continue
+      const charged = cheb(m.coord, o.coord) <= r ? 1 : 0
+      potential += Math.min(snap.stackCap, (o.mineCharge ?? 1) + charged)
+    }
+    const score = immediate + potential
+    if (score > bestScore) {
+      bestScore = score
+      best = m
+    }
+  }
+  return best
 }
 
 function hasRevealedNeighbour(t: TileView, snap: BoardSnapshot, w: number): boolean {
@@ -83,65 +149,56 @@ function hasRevealedNeighbour(t: TileView, snap: BoardSnapshot, w: number): bool
   return false
 }
 
-/** The mine we're grooming for the Boss: the armed mine nearest the centre, then biggest stack. */
-function keystoneMine(mines: TileView[], boss: Coord): TileView | null {
-  if (mines.length === 0) return null
-  return [...mines].sort(
-    (a, b) => cheb(a.coord, boss) - cheb(b.coord, boss) || (b.mineCharge ?? 1) - (a.mineCharge ?? 1),
-  )[0]!
-}
-
-/** One move for the given board, or null if there is nothing useful to do right now. */
+/** One move for the given board, or null if there is nothing useful to do right now.
+ *
+ * The strategy is three phases, in priority order:
+ *   1. CLEAR the field outward — reveal frontier tiles (which also arms the near-Boss mines) and
+ *      detonate *far* ordnance to open ground and earn Hook charges. The near-Boss killers are
+ *      spared; they are never spent on ground.
+ *   2. GATHER — once the field is clear, hook the near-Boss mines down the gradient into a tight
+ *      blob on the Boss ring. The minimal, no-touching spawn can't kill the Boss until this packs
+ *      them, so this is the earned skill the board is built around.
+ *   3. CHAIN — detonate the packed blob in escalating order (cheap chargers first) so it self-
+ *      charges past the Boss's HP.
+ */
 export function autoPlay(snap: BoardSnapshot): AutoAction | null {
   if (snap.status !== 'playing') return null
   const mines = armedMines(snap)
-  const cov = actionable(snap)
   const boss = bossCoord(snap)
   const bossAlive = snap.bossHp > 0
+  const tappable = actionable(snap).filter(t => t.tier !== 'boss')
+  const near = mines.filter(m => isNear(m, boss, snap))
+  const far = mines.filter(m => !isNear(m, boss, snap))
 
-  if (cov.length === 0) {
-    // Field cleared — only the Boss (and maybe mines) remain. Spend mines on it, biggest first.
-    const best = bestBy(mines, m => (reaches(m, boss, snap) ? 100 : 0) + (m.mineCharge ?? 1))
-    return best ? { type: 'detonate', coord: best.coord } : null
-  }
-
-  // === Boss campaign: build a keystone stack near the centre, then deliver it. ===
-  const keystone = keystoneMine(mines, boss)
-  // Only run the campaign once a mine is near enough that it (or a hook or two) can reach the Boss.
-  if (bossAlive && keystone && cheb(keystone.coord, boss) <= snap.blastRadiusCap + 3) {
-    const ks = keystone.mineCharge ?? 1
-    const wantStack = Math.min(snap.stackCap, 5) // groom a meaty stack before spending it
-
-    // Pump the keystone: detonate an armed mine whose blast overlaps it (that's +1 to its stack).
-    if (ks < wantStack) {
-      const pumpers = mines.filter(
-        m => m !== keystone && cheb(m.coord, keystone.coord) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap),
-      )
-      // Prefer a pumper that also clears the most ground and isn't itself a Boss-ready delivery.
-      const p = bestBy(pumpers, m => clearValue(m, snap) + (reaches(m, boss, snap) ? -5 : 0))
-      if (p) return { type: 'detonate', coord: p.coord }
-    }
-
-    // Keystone is grown (or can't be pumped further): deliver it.
-    if (reaches(keystone, boss, snap)) return { type: 'detonate', coord: keystone.coord }
-    const dir = snap.hookCharges > 0 ? hookDirToward(keystone, boss, snap) : null
-    if (dir) return { type: 'hook', coord: keystone.coord, dir }
-    // Out of range and no hook lane yet — fall through to clear a path toward the centre.
-  }
-
-  // === Clear the field. Detonate a mine that opens ground; while the Boss lives, spare the keystone. ===
-  const clearers = mines.filter(m => m !== (bossAlive ? keystone : null) && clearValue(m, snap) > 0)
-  const c = bestBy(clearers, m => clearValue(m, snap))
+  // === Phase 1: clear/arm the field. Detonate FAR ordnance to open ground; reveal the frontier. ===
+  // The near-Boss killers are NEVER spent here — they're saved for the blob. Crucially, we do not
+  // start the Boss campaign until the field is fully clear: touching the near mines early (e.g. while
+  // broke, before they're gathered and charged) dumps them at stack 1 and throws away the win.
+  const farClearers = far.filter(m => clearValue(m, snap) > 0)
+  const c = bestBy(farClearers, m => clearValue(m, snap))
   if (c) return { type: 'detonate', coord: c.coord }
 
-  // Open new ground / uncover mines. Never tap the Boss (it's immune → would spin).
-  const tappable = cov.filter(t => t.tier !== 'boss')
-  if (tappable.length > 0 && snap.playerCharge >= 1) {
-    const frontier = tappable.find(t => hasRevealedNeighbour(t, snap, snap.width)) ?? tappable[0]!
-    return { type: 'reveal', coord: frontier.coord }
+  if (tappable.length > 0) {
+    // Still ground to clear. Reveal if we can afford it; otherwise wait for charge to regen —
+    // do NOT raid the near mines to make a move.
+    if (snap.playerCharge >= 1) {
+      const frontier = tappable.find(t => hasRevealedNeighbour(t, snap, snap.width)) ?? tappable[0]!
+      return { type: 'reveal', coord: frontier.coord }
+    }
+    return null // broke — regen will let us keep clearing next tick
   }
 
-  // Broke / nothing else: spend any mine (refuel + clear, or chip the Boss); else wait for regen.
+  // === Field is clear. Phases 2 & 3: gather the near mines into a blob, then chain it. ===
+  if (bossAlive && near.length > 0) {
+    const gather = gatherMove(near, boss, snap) // Phase 2: pack
+    if (gather) return gather
+    const starter = chainStarter(near, boss, snap) // Phase 3: escalating detonation
+    if (starter) return { type: 'detonate', coord: starter.coord }
+  }
+
+  // Boss already dead but armed mines linger — spend them to finish clearing any last ground.
   const any = bestBy(mines, m => clearValue(m, snap) + (m.mineCharge ?? 1) * 0.1)
-  return any ? { type: 'detonate', coord: any.coord } : null
+  if (any && (clearValue(any, snap) > 0 || !bossAlive)) return { type: 'detonate', coord: any.coord }
+
+  return null // nothing affordable — wait for charge to regen
 }

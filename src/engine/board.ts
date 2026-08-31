@@ -11,6 +11,11 @@ import { Rng } from './rng'
 // The toughness ramp for random ground. `boss` is excluded — it is placed once, at centre.
 const TIER_ORDER: readonly Tier[] = ['common', 'advanced', 'elite', 'fleet']
 
+/** Chebyshev radius around the Boss kept free of mines: no mine spawns within this, so the
+ *  Boss-adjacent cells are mine-free landing pads to pack mines onto, and no mine is in range of
+ *  the Boss at low stack. Delivery must be earned by hooking mines inward. */
+const BOSS_FREE = 2
+
 export interface Tile {
   readonly x: number
   readonly y: number
@@ -154,33 +159,63 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
     }
   }
 
-  // A ring of mines within blast reach of the Boss, clustered enough that a detonation sequence
-  // self-charges them to beat the Boss HP. (Known-working baseline. NOTE: the desired *minimal,
-  // no-touching, hook-to-deliver* distribution needs a hook-gathering solver bot to verify — see
-  // docs/GAME_DESIGN.md "Open questions"; until that exists this cluster keeps boards solvable.)
-  const ring = 2
-  const centreCells: number[] = []
+  // The near-Boss mines are the ONLY ones that can kill it. Sized minimally: a tight cluster of N
+  // mines detonated in sequence deals 1+2+…+N = N(N+1)/2 (each blast hits the Boss AND overlap-
+  // charges the rest), so killing HP H needs ≈√(2H) mines. Place ≈√(2H) mines in ONE compact WEDGE
+  // at distance BOSS_FREE…radiusCap — never adjacent to the Boss, never touching each other — so
+  // you must use directional Magnetic Hooks to pull them into a tight blob on the Boss ring and
+  // chain it. Compact wedge → gathering is cheap in hooks. Verified solvable by the reference bot.
+  const wangle = rng.float() * Math.PI * 2
+  const wx = Math.cos(wangle)
+  const wy = Math.sin(wangle)
+  // The wedge fills the "near" zone (cfg.gatherRadius), the SAME radius the strategy layer gathers
+  // from — so every wedge mine is a killer to pack and every field mine spawns strictly outside it.
+  const ring = cfg.gatherRadius
+  const centreCells: { i: number; d: number }[] = []
   for (let dy = -ring; dy <= ring; dy++) {
     for (let dx = -ring; dx <= ring; dx++) {
+      const cheb = Math.max(Math.abs(dx), Math.abs(dy))
+      if (cheb < BOSS_FREE || cheb > ring) continue // inner mine-free zone … out to the near edge
+      const len = Math.hypot(dx, dy)
+      if (len > 0 && (dx * wx + dy * wy) / len < 0) continue // ~180° wedge toward (wx,wy)
       const nx = boss.x + dx
       const ny = boss.y + dy
       const i = idx(width, nx, ny)
-      if (nx >= 0 && ny >= 0 && nx < width && ny < height && !reserved.has(i)) centreCells.push(i)
+      if (nx >= 0 && ny >= 0 && nx < width && ny < height && !reserved.has(i)) centreCells.push({ i, d: len })
     }
   }
-  const minCentreMines = Math.min(centreCells.length, Math.ceil(cfg.bossHp / 2) + 9)
+  // ≈√(2·HP) mines chain to exactly HP; +4 margin because packing is imperfect and a few mines get
+  // stranded a ring out. Placing them NEAREST-first minimises the hooks needed to pack them.
+  const minCentreMines = Math.min(centreCells.length, Math.ceil(Math.sqrt(2 * cfg.bossHp)) + 4)
 
+  // No two mines may spawn touching (Chebyshev-adjacent) — stacks are built only by hooking. Break
+  // ties in the nearest-first order with the RNG so the wedge isn't a deterministic lattice.
   const mineCells = new Set<number>()
+  const touchesMine = (i: number): boolean => {
+    const x = i % width
+    const y = (i / width) | 0
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++)
+        if ((dx || dy) && x + dx >= 0 && y + dy >= 0 && x + dx < width && y + dy < height && mineCells.has(idx(width, x + dx, y + dy))) return true
+    return false
+  }
   rng.shuffle(centreCells)
-  for (let i = 0; i < minCentreMines; i++) mineCells.add(centreCells[i]!)
-
-  // Fill the remaining mines from anywhere non-reserved, non-mine.
+  centreCells.sort((a, b) => a.d - b.d)
+  for (const { i } of centreCells) {
+    if (mineCells.size >= minCentreMines) break
+    if (!touchesMine(i)) mineCells.add(i)
+  }
+  // Fill the rest only BEYOND the near zone, so the near-Boss set stays exactly the wedge.
   const rest: number[] = []
   for (let i = 0; i < total; i++) {
-    if (!reserved.has(i) && !mineCells.has(i)) rest.push(i)
+    const cheb = Math.max(Math.abs((i % width) - boss.x), Math.abs(((i / width) | 0) - boss.y))
+    if (!reserved.has(i) && !mineCells.has(i) && cheb > ring) rest.push(i)
   }
   rng.shuffle(rest)
-  for (let i = 0; i < rest.length && mineCells.size < cfg.mineCount; i++) mineCells.add(rest[i]!)
+  for (const i of rest) {
+    if (mineCells.size >= cfg.mineCount) break
+    if (!touchesMine(i)) mineCells.add(i)
+  }
 
   const hardness = buildHardnessField(rng, width, height)
 
