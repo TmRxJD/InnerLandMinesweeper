@@ -19,7 +19,8 @@ export type {
   GameResult,
   EngineOptions,
   MinesweeperEngine,
+  Medal,
 } from './types'
 
-export { DIFFICULTIES, SCORE_CHAIN_WEIGHT, SCORE_CRACK_WEIGHT } from './tuning'
-export type { DifficultyConfig, TierBand } from './tuning'
+export { DIFFICULTIES, blastRadiusForStack, medalForTime } from './tuning'
+export type { DifficultyConfig } from './tuning'

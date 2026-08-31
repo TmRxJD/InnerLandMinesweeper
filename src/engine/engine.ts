@@ -19,7 +19,7 @@ import type {
   MinesweeperEngine,
   TileView,
 } from './types'
-import { DIFFICULTIES, SCORE_CHAIN_WEIGHT, SCORE_CRACK_WEIGHT, type DifficultyConfig } from './tuning'
+import { DIFFICULTIES, blastRadiusForStack, medalForTime, type DifficultyConfig } from './tuning'
 import {
   generateBoard,
   neighbours,
@@ -34,12 +34,10 @@ class Engine implements MinesweeperEngine {
   private readonly board: Board
   private readonly difficulty: Difficulty
   private readonly seed: string
-  private readonly clock: () => number
 
   private playerCharge: number
-  private timeRemaining: number
+  private timeElapsed = 0
   private status: GameStatus = 'playing'
-  private readonly startedAt: number
 
   private moves = 0
   private detonations = 0
@@ -54,11 +52,8 @@ class Engine implements MinesweeperEngine {
     this.cfg = DIFFICULTIES[opts.difficulty]
     this.difficulty = opts.difficulty
     this.seed = opts.seed
-    this.clock = opts.now ?? (() => Date.now() / 1000)
     this.board = generateBoard(this.cfg, opts.seed)
     this.playerCharge = this.cfg.startingCharge
-    this.timeRemaining = this.cfg.timerSeconds
-    this.startedAt = this.clock()
     this.groundTotal = this.board.tiles.filter(t => !t.isMine).length
   }
 
@@ -98,16 +93,17 @@ class Engine implements MinesweeperEngine {
     const gained = Math.round(tile.mineCharge * this.cfg.chargeConversion)
     if (gained !== 0) this.setPlayerCharge(this.playerCharge + gained, events)
 
-    // 2. The mine leaves the board. Blast damage per tile is a FRACTION of its max HP
-    //    (so small tiles clear), but the absolute removal is CAPPED (so a fraction of a huge
-    //    HP pool can't gut a Fleet — a 1× blast barely dents one). Charge multiplies the
-    //    result and distance attenuates it; see the loop below.
-    const radiusTiles = withinRadius(this.board, tile.x, tile.y, this.cfg.blastRadius)
+    // 2. The mine leaves the board. Blast damage = the mine's stack (flat), and the radius
+    //    also grows with the stack. Every non-boss tile is 1 HP so any blast vaporises it;
+    //    the Boss takes `stack` damage. Bigger stack → more boss damage AND more reach.
+    const stack = tile.mineCharge
+    const radius = blastRadiusForStack(stack, this.cfg.blastRadiusCap)
+    const radiusTiles = withinRadius(this.board, tile.x, tile.y, radius)
     tile.state = 'detonated'
     events.push({
       kind: 'mineDetonated',
       coord: { x: tile.x, y: tile.y },
-      intensity: tile.mineCharge,
+      intensity: stack,
       radius: radiusTiles.map(t => ({ x: t.x, y: t.y })),
     })
 
@@ -125,15 +121,9 @@ class Engine implements MinesweeperEngine {
         continue
       }
       if (t.state === 'cleared') continue
-      // Per-tier blast bite: each class loses a set fraction of its MAX HP per point of charge
-      // at the core (Common clears, Advanced ~80%, Elite ~50%, Fleet ~30%, Boss a sliver), so
-      // the number of blasts to clear a tile is a property of its CLASS, not its (hidden) HP.
-      // Charge multiplies it; distance attenuates it.
-      const base = t.maxHp * this.cfg.blastPctByTier[t.tier]
-      const dist = Math.max(Math.abs(t.x - tile.x), Math.abs(t.y - tile.y))
-      const falloff = Math.pow(this.cfg.blastFalloff, Math.max(0, dist - 1))
-      const dmg = Math.max(0, Math.round(base * tile.mineCharge * falloff))
-      t.hp -= dmg
+      // Flat `stack` damage to every tile in the square. 1-HP enemies vaporise; the Boss (the
+      // only multi-hit tile) is chunked by `stack`.
+      t.hp -= stack
       if (t.hp <= 0) {
         // Vaporised by the blast: cleared, but its number is never revealed. Information
         // stays tied to risky manual taps.
@@ -162,7 +152,8 @@ class Engine implements MinesweeperEngine {
         this.setPlayerCharge(this.playerCharge + whole, events)
       }
     }
-    this.spendTime(deltaSeconds, events)
+    // The clock only counts up — it is the score, never a loss condition.
+    this.timeElapsed += deltaSeconds
     return events
   }
 
@@ -172,10 +163,17 @@ class Engine implements MinesweeperEngine {
       height: this.board.height,
       tiles: this.board.tiles.map(t => this.view(t)),
       playerCharge: this.playerCharge,
-      timeRemaining: this.timeRemaining,
+      timeElapsed: this.timeElapsed,
       moves: this.moves,
       status: this.status,
+      bossHp: this.bossHp(),
+      bossMaxHp: this.cfg.bossHp,
     }
+  }
+
+  private bossHp(): number {
+    const b = this.board.tiles.find(t => t.tier === 'boss')
+    return b ? Math.max(0, b.hp) : 0
   }
 
   result(): GameResult | null {
@@ -185,25 +183,14 @@ class Engine implements MinesweeperEngine {
   // -- ground clicks -------------------------------------------------------
 
   private clickGround(tile: Tile, events: GameEvent[]): void {
-    // Any tile can be worked by hand, but a single tap removes at most `handTapDamage` HP
-    // (and never more charge than that). Commons clear in one tap; tough tiles take many, so
-    // a blast is far better. One tile per tap — no flood-fill.
-    const applied = Math.min(this.playerCharge, this.cfg.handTapDamage)
-    if (applied >= tile.hp) {
-      // Clean clear: pay the tile's full (hidden) HP.
-      const cost = tile.hp
-      this.setPlayerCharge(this.playerCharge - cost, events)
-      this.clearGroundTile(tile, cost, events)
-      this.checkWin(events)
-      return
-    }
-
-    // Partial hand-chip: dent it by `applied` (0 if broke). The HP bar shows the progress.
-    if (applied > 0) {
-      tile.hp -= applied
-      this.setPlayerCharge(this.playerCharge - applied, events)
-    }
-    this.damageTile(tile, events)
+    // A hand-tap costs 1 charge and deals 1 damage. A 1-HP enemy clears; the Boss only chips
+    // (the slow fallback — blasts are how you really kill it). Broke → the tap does nothing;
+    // wait for regen or detonate a mine. One tile per tap, no flood-fill.
+    if (this.playerCharge < 1) return
+    this.setPlayerCharge(this.playerCharge - 1, events)
+    tile.hp -= 1
+    if (tile.hp <= 0) this.clearGroundTile(tile, 1, events)
+    else this.damageTile(tile, events)
     this.checkWin(events)
   }
 
@@ -262,9 +249,9 @@ class Engine implements MinesweeperEngine {
   /** A mine caught inside another mine's blast gains charge (capped) — the Chrono-Jump
    *  overlap. Called for every already-armed mine within the blast radius. */
   private chargeMine(mine: Tile, events: GameEvent[]): void {
-    if (mine.mineCharge >= this.cfg.maxMineCharge) return // already at the cap
+    if (mine.mineCharge >= this.cfg.stackCap) return // already at the cap
     const from = mine.mineCharge
-    mine.mineCharge = Math.min(this.cfg.maxMineCharge, mine.mineCharge + this.cfg.chargeGainPerOverlap)
+    mine.mineCharge = Math.min(this.cfg.stackCap, mine.mineCharge + this.cfg.chargeGainPerOverlap)
     events.push({ kind: 'mineChargeChanged', coord: { x: mine.x, y: mine.y }, from, to: mine.mineCharge })
   }
 
@@ -278,46 +265,35 @@ class Engine implements MinesweeperEngine {
     events.push({ kind: 'playerChargeChanged', from, to: clamped })
   }
 
-  private spendTime(seconds: number, events: GameEvent[]): void {
-    this.timeRemaining = Math.max(0, this.timeRemaining - seconds)
-    if (this.timeRemaining <= 0 && this.status === 'playing') {
-      this.endGame('lost', events)
-    }
-  }
-
   private checkWin(events: GameEvent[]): void {
     if (this.status !== 'playing') return
     for (const t of this.board.tiles) {
       if (t.state === 'covered' || t.state === 'cracked') return
     }
-    this.endGame('won', events)
+    this.endGame(events)
   }
 
-  private endGame(outcome: 'won' | 'lost', events: GameEvent[]): void {
-    this.status = outcome === 'won' ? 'won' : 'lost'
-    const result = this.buildResult(outcome)
+  private endGame(events: GameEvent[]): void {
+    this.status = 'won' // the only end state — the board is always completable
+    const result = this.buildResult()
     this.finalResult = result
-    events.push({ kind: outcome === 'won' ? 'gameWon' : 'gameLost', result })
+    events.push({ kind: 'gameWon', result })
   }
 
-  private buildResult(outcome: 'won' | 'lost'): GameResult {
-    const duration = Math.max(0, this.clock() - this.startedAt)
-    const base = this.timeRemaining * this.cfg.scoreDifficultyMultiplier
-    const raw = base + SCORE_CHAIN_WEIGHT * this.maxChain - SCORE_CRACK_WEIGHT * this.cracks
-    const score = outcome === 'won' ? Math.max(0, Math.round(raw)) : 0
+  private buildResult(): GameResult {
+    const timeSeconds = Math.round(this.timeElapsed)
+    const parLeft = Math.max(0, this.cfg.parSeconds - this.timeElapsed)
     return {
       seed: this.seed,
       difficulty: this.difficulty,
-      outcome,
-      score,
-      durationSeconds: Math.round(duration),
-      timeRemaining: Math.round(this.timeRemaining),
+      outcome: 'won',
+      // Score rewards speed: whatever of par you beat, scaled. Faster clear = higher score.
+      score: Math.max(0, Math.round(parLeft * this.cfg.scoreDifficultyMultiplier)),
+      timeSeconds,
+      medal: medalForTime(this.cfg, timeSeconds),
       moves: this.moves,
       detonations: this.detonations,
-      maxChain: this.maxChain,
-      cracks: this.cracks,
       tilesCleared: this.tilesCleared,
-      boardClearedFraction: this.groundTotal === 0 ? 1 : this.tilesCleared / this.groundTotal,
     }
   }
 

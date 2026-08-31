@@ -1,160 +1,134 @@
 /**
- * Tuning constants — every number the design deferred to playtesting lives here, and
- * ONLY here. The harness sweeps these; the engine reads them. Nothing is a magic literal
- * buried in game logic.
+ * Tuning constants — every number the design deferred to playtesting lives here, and ONLY
+ * here. The harness sweeps these; the engine reads them. Nothing is a magic literal buried in
+ * game logic.
  *
- * These are starting guesses, not decisions. See docs/GAME_DESIGN.md § "What is settled".
+ * The model (see docs/GAME_DESIGN.md): a fast outward→inward race. Every non-boss tile is a
+ * 1-HP enemy that vaporises on any hit; the single centre Boss is the only multi-hit enemy.
+ * Mines are your weapons — detonating one deals `stack` damage across a square whose radius
+ * also grows with the stack, and overlapping detonations pump nearby armed mines' stacks up.
+ * You build big stacks on inner mines and deliver them to the Boss. The timer does not kill
+ * you: it is the score. Faster clear = better rank.
  */
 
-import type { Difficulty, Tier } from './types'
-
-export interface TierBand {
-  readonly minHp: number
-  readonly maxHp: number
-}
+import type { Difficulty, Medal, Tier } from './types'
 
 export interface DifficultyConfig {
   readonly width: number
   readonly height: number
-  /** Number of mines on the board — an explicit cap. Mines are the fast way to clear tough
-   *  tiles; you *can* chip tough tiles by hand, but slowly (see handTapDamage), so mines
-   *  stay valuable while their count can drop with difficulty. */
+  /** Number of hidden mines (your ammunition). Roughly 14% of the board. */
   readonly mineCount: number
-  /** Max HP a single hand-tap removes (also the charge it costs). Commons clear in one tap;
-   *  Advanced take ~2, Elite ~3, Fleet ~4, and the Boss a dozen-plus — the HP bar is the
-   *  pacing. A charged mine still clears a cluster far faster. Lower = slower to hand-clear. */
-  readonly handTapDamage: number
-  /** Relative weights for tier assignment across the board. */
+  /** Cosmetic only: relative mix of enemy *sprites*. All non-boss tiles are 1 HP; the tier
+   *  just picks which Tower enemy art shows, so the field has visual variety. */
   readonly tierWeights: Readonly<Record<Tier, number>>
-  /** How strongly tough tiles cluster together (0 = uniform, 1 = maximally clumped). */
+  /** Cosmetic only: how strongly the sprite tiers clump (0 = uniform, 1 = maximally clumped). */
   readonly hardGroundGradient: number
-  /** HP band per enemy class, including the single centre `boss`. */
-  readonly bands: Readonly<Record<Tier, TierBand>>
-  /** Fixed timer budget in seconds. Generous by design; kills stalls, not thinking. */
-  readonly timerSeconds: number
-  /** Starting player charge. Must cover at least a few Common clears. */
+  /** Boss HP. The Boss is the only multi-hit tile; it must take several stacked blasts, so keep
+   *  it comfortably above `stackCap` (≈2.5×) or a single maxed mine one-shots the climax. */
+  readonly bossHp: number
+  /** Target clear time in seconds — the par used for score and medals. NOT a loss timer;
+   *  running past it just lowers the score. */
+  readonly parSeconds: number
+  /** Medal thresholds in seconds (finish at or under → that medal). gold < silver < bronze. */
+  readonly goldSeconds: number
+  readonly silverSeconds: number
+  readonly bronzeSeconds: number
+  /** Starting player charge. */
   readonly startingCharge: number
-  /** Hard ceiling on the player's charge pool — detonations can't inflate it past this. */
+  /** Hard ceiling on the player's charge pool. */
   readonly maxPlayerCharge: number
-  /** Fraction of a tile's MAX HP a blast removes at the core, per point of mine charge, keyed
-   *  by CLASS: Common 1.0 (clears), Advanced ~0.8, Elite ~0.5, Fleet ~0.3, Boss a sliver. This
-   *  makes "blasts to clear" a property of the class, independent of its hidden HP — so HP can
-   *  be cranked for a wide hand-clear / charge-cost spread without changing blast counts.
-   *  Charge multiplies it; distance attenuates it (blastFalloff). */
-  readonly blastPctByTier: Readonly<Record<Tier, number>>
-  /** Per-ring multiplier as a blast travels outward from the mine. The adjacent ring
-   *  (distance 1) takes the full per-tier bite; distance 2 takes that × blastFalloff,
-   *  distance 3 × blastFalloff², and so on. < 1 makes a blast an explosion (strong core,
-   *  weaker edge) rather than a uniform slab. */
-  readonly blastFalloff: number
-  /** Chebyshev radius of a detonation. Blasts vaporise without revealing numbers, so a
-   *  wider radius clears more ground without leaking information — it is the main engine
-   *  of board clearing, not a scanner. */
-  readonly blastRadius: number
-  /** Charge a mine gains per overlapping blast. */
-  readonly chargeGainPerOverlap: number
-  /** Hard ceiling on a mine's charge multiplier — bounds late-game blast damage. */
-  readonly maxMineCharge: number
-  /** Fraction of a detonated mine's charge that converts into the player pool. */
-  readonly chargeConversion: number
-  /** Passive charge regenerated per second (Option 1: a second charge source so mines aren't
-   *  the only one). 0 = off. */
+  /** Passive charge regenerated per second. Charge gates hand-tapping (1 charge per tap), so
+   *  keeping it scarce is what makes you rely on blasts rather than tapping the whole board. */
   readonly chargeRegenPerSecond: number
+  /** Hard ceiling on a mine's stack. Both blast damage and blast radius scale off the stack,
+   *  so this caps how big a single detonation can get. */
+  readonly stackCap: number
+  /** Hard ceiling on blast radius (Chebyshev). Radius grows slowly with stack up to this. */
+  readonly blastRadiusCap: number
+  /** Stack a mine gains each time it is caught inside another mine's blast (overlap charging). */
+  readonly chargeGainPerOverlap: number
+  /** Fraction of a detonated mine's stack that converts into the player's charge pool. */
+  readonly chargeConversion: number
+  /** Multiplier applied to the (par − time) score on this difficulty. */
   readonly scoreDifficultyMultiplier: number
 }
 
-/**
- * A clean clear costs the tile's hidden HP in player charge (1 charge per HP). The class is
- * the *visible* band; the exact cost within it is hidden, and that gap is the risk. `boss`
- * is far tougher than the ramp and only ever appears once, at board centre.
- */
-const SHARED_BANDS: Record<Tier, TierBand> = {
-  common: { minHp: 2, maxHp: 4 },
-  advanced: { minHp: 8, maxHp: 14 },
-  elite: { minHp: 16, maxHp: 26 },
-  fleet: { minHp: 30, maxHp: 46 },
-  boss: { minHp: 60, maxHp: 90 }, // overridden per difficulty (see bandsWithBoss)
+/** Blast radius for a given stack: starts at 1, grows one ring every two stacks, capped.
+ *  stack 1→r1, 2→r1, 3→r2, 4→r2, 5→r3, 6→r3. */
+export function blastRadiusForStack(stack: number, cap: number): number {
+  return Math.max(1, Math.min(cap, 1 + Math.floor((stack - 1) / 2)))
 }
 
-/** Blast bite per class: fraction of MAX HP a charge-1 core blast removes. Common clears in one;
- *  Advanced ~2 blasts, Elite ~2, Fleet ~4, Boss a long grind. Because it's a fraction of max HP,
- *  the blast-count is fixed per class no matter how high HP is cranked. */
-const BLAST_PCT: Record<Tier, number> = {
-  common: 1.0,
-  advanced: 0.8,
-  elite: 0.5,
-  fleet: 0.3,
-  boss: 0.18,
-}
-
-/** The ordinary classes share one HP ramp across difficulties; only the Boss scales, so its
- *  end-game grind grows with the mode instead of being an identical slog on Easy and Hard. */
-function bandsWithBoss(minHp: number, maxHp: number): Record<Tier, TierBand> {
-  return { ...SHARED_BANDS, boss: { minHp, maxHp } }
-}
-
-export const SCORE_CHAIN_WEIGHT = 25
-export const SCORE_CRACK_WEIGHT = 15
+/** A shared cosmetic sprite mix (skewed toward Common). Difficulties can override. */
+const SPRITE_MIX: Record<Tier, number> = { common: 12, advanced: 5, elite: 3, fleet: 2, boss: 0 }
 
 export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   gentle: {
-    width: 9,
-    height: 9,
-    mineCount: 14,
-    handTapDamage: 6,
-    tierWeights: { common: 13, advanced: 4, elite: 1.6, fleet: 0.5, boss: 0 },
-    hardGroundGradient: 0.16,
-    maxMineCharge: 5,
-    bands: bandsWithBoss(70, 100),
-    timerSeconds: 300,
-    startingCharge: 9,
-    maxPlayerCharge: 10,
-    blastPctByTier: BLAST_PCT,
-    blastRadius: 2,
-    blastFalloff: 0.4,
+    width: 13,
+    height: 13,
+    mineCount: 24, // ~14% of 169
+    tierWeights: SPRITE_MIX,
+    hardGroundGradient: 0.18,
+    bossHp: 12,
+    parSeconds: 160,
+    goldSeconds: 90,
+    silverSeconds: 125,
+    bronzeSeconds: 160,
+    startingCharge: 8,
+    maxPlayerCharge: 12,
+    chargeRegenPerSecond: 1.0,
+    stackCap: 6,
+    blastRadiusCap: 3,
     chargeGainPerOverlap: 1,
-    chargeConversion: 3,
-    chargeRegenPerSecond: 1.2,
+    chargeConversion: 2,
     scoreDifficultyMultiplier: 1,
   },
   standard: {
-    width: 11,
-    height: 11,
-    mineCount: 18,
-    handTapDamage: 6,
-    tierWeights: { common: 11, advanced: 4.5, elite: 2.2, fleet: 0.9, boss: 0 },
+    width: 17,
+    height: 17,
+    mineCount: 40, // ~14% of 289
+    tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
-    maxMineCharge: 5,
-    bands: bandsWithBoss(100, 150),
-    timerSeconds: 420,
-    startingCharge: 9,
-    maxPlayerCharge: 10,
-    blastPctByTier: BLAST_PCT,
-    blastRadius: 2,
-    blastFalloff: 0.4,
+    bossHp: 16,
+    parSeconds: 270,
+    goldSeconds: 150,
+    silverSeconds: 215,
+    bronzeSeconds: 270,
+    startingCharge: 8,
+    maxPlayerCharge: 12,
+    chargeRegenPerSecond: 1.1,
+    stackCap: 6,
+    blastRadiusCap: 3,
     chargeGainPerOverlap: 1,
-    chargeConversion: 3,
-    chargeRegenPerSecond: 1.5,
+    chargeConversion: 2,
     scoreDifficultyMultiplier: 1.6,
   },
   hard: {
-    width: 15,
-    height: 15,
-    mineCount: 28,
-    handTapDamage: 6,
-    tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
-    hardGroundGradient: 0.26,
-    maxMineCharge: 6,
-    bands: bandsWithBoss(150, 220),
-    timerSeconds: 1000,
-    startingCharge: 12,
+    width: 21,
+    height: 21,
+    mineCount: 62, // ~14% of 441
+    tierWeights: SPRITE_MIX,
+    hardGroundGradient: 0.24,
+    bossHp: 24,
+    parSeconds: 400,
+    goldSeconds: 240,
+    silverSeconds: 320,
+    bronzeSeconds: 400,
+    startingCharge: 10,
     maxPlayerCharge: 14,
-    blastPctByTier: BLAST_PCT,
-    blastRadius: 2,
-    blastFalloff: 0.4,
+    chargeRegenPerSecond: 1.2,
+    stackCap: 6,
+    blastRadiusCap: 3,
     chargeGainPerOverlap: 1,
-    chargeConversion: 3,
-    chargeRegenPerSecond: 1.3,
+    chargeConversion: 2,
     scoreDifficultyMultiplier: 2.4,
   },
+}
+
+/** Which medal a clear time earns on a difficulty. */
+export function medalForTime(cfg: DifficultyConfig, seconds: number): Medal {
+  if (seconds <= cfg.goldSeconds) return 'gold'
+  if (seconds <= cfg.silverSeconds) return 'silver'
+  if (seconds <= cfg.bronzeSeconds) return 'bronze'
+  return 'none'
 }

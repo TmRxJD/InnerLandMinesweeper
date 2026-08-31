@@ -31,6 +31,9 @@ export interface Coord {
 
 export type Difficulty = 'gentle' | 'standard' | 'hard'
 
+/** Medal earned for a clear time (see tuning thresholds). */
+export type Medal = 'gold' | 'silver' | 'bronze' | 'none'
+
 // ---------------------------------------------------------------------------
 // Tile state
 // ---------------------------------------------------------------------------
@@ -73,14 +76,18 @@ export interface BoardSnapshot {
   readonly height: number
   readonly tiles: readonly TileView[] // row-major, length width*height
   readonly playerCharge: number
-  /** Seconds left on the fixed budget. Loss fires when this hits 0. */
-  readonly timeRemaining: number
+  /** Elapsed seconds — a stopwatch, the score. It only counts up; there is no loss timer. */
+  readonly timeElapsed: number
   /** Total player actions taken so far (reveals + detonations). */
   readonly moves: number
   readonly status: GameStatus
+  /** Current / starting Boss HP — for the HUD boss bar. */
+  readonly bossHp: number
+  readonly bossMaxHp: number
 }
 
-export type GameStatus = 'playing' | 'won' | 'lost'
+// There is no 'lost' — the board is always completable and the clock is only the score.
+export type GameStatus = 'playing' | 'won'
 
 // ---------------------------------------------------------------------------
 // Events — the write model the UI animates
@@ -105,7 +112,6 @@ export type GameEvent =
   | { kind: 'numberDecremented'; coord: Coord; from: number; to: number }
   | { kind: 'playerChargeChanged'; from: number; to: number }
   | { kind: 'gameWon'; result: GameResult }
-  | { kind: 'gameLost'; result: GameResult }
 
 export type CauseOfArming = 'click' | 'blast'
 
@@ -123,16 +129,16 @@ export type EventList = readonly GameEvent[]
 export interface GameResult {
   readonly seed: string
   readonly difficulty: Difficulty
-  readonly outcome: 'won' | 'lost'
+  /** Always 'won' — the board is always completable; the clock only ranks you. */
+  readonly outcome: 'won'
+  /** Higher is better: how much of par you beat, scaled by difficulty. */
   readonly score: number
-  readonly durationSeconds: number
-  readonly timeRemaining: number
+  /** The real metric — clear time in whole seconds (lower is better). */
+  readonly timeSeconds: number
+  readonly medal: Medal
   readonly moves: number
   readonly detonations: number
-  readonly maxChain: number
-  readonly cracks: number
   readonly tilesCleared: number
-  readonly boardClearedFraction: number
 }
 
 // ---------------------------------------------------------------------------

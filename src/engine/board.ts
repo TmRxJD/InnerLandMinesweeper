@@ -111,9 +111,13 @@ function upgradeTier(tier: Tier, steps: number): Tier {
 
 /**
  * Generate a board. Guarantees:
- *  - the opening cell is Common with zero adjacent mines (a safe first tap),
- *  - mines never sit in the opening's 8-neighbourhood (so its count is genuinely 0),
- *  - tough tiles cluster via a smooth hardness field scaled by `hardGroundGradient`.
+ *  - the Boss is pinned to the exact centre and is never a mine,
+ *  - the opening sits in a corner (zero adjacent mines, safe first tap) so play routes
+ *    outward → inward toward the Boss,
+ *  - enough mines sit within blast reach of the centre that the Boss is always killable by
+ *    blasts (not only by the slow hand-tap fallback),
+ *  - sprite tiers clump via a smooth hardness field (cosmetic only — every non-boss tile is
+ *    1 HP regardless of tier).
  */
 export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
   const rng = new Rng(seed)
@@ -124,13 +128,15 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
   const boss: Coord = { x: Math.floor(width / 2), y: Math.floor(height / 2) }
   const bossIdx = idx(width, boss.x, boss.y)
 
-  // Opening: an interior cell so its full neighbourhood exists on-board — and never the
-  // boss cell, which must stay a tough ground tile to clear.
-  let opening: Coord = { x: rng.int(1, Math.max(1, width - 2)), y: rng.int(1, Math.max(1, height - 2)) }
-  let guard = 0
-  while (idx(width, opening.x, opening.y) === bossIdx && guard++ < 16) {
-    opening = { x: rng.int(1, Math.max(1, width - 2)), y: rng.int(1, Math.max(1, height - 2)) }
-  }
+  // Opening: a corner cell (one step in from the true corner so its neighbourhood is on-board),
+  // chosen at random among the four. Starting at a corner pushes the natural route inward.
+  const corners: Coord[] = [
+    { x: 1, y: 1 },
+    { x: width - 2, y: 1 },
+    { x: 1, y: height - 2 },
+    { x: width - 2, y: height - 2 },
+  ]
+  const opening = corners[rng.int(0, corners.length - 1)]!
 
   const reserved = new Set<number>()
   reserved.add(bossIdx) // no mine on the boss
@@ -145,14 +151,30 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
     }
   }
 
-  // Mine placement: shuffle all non-reserved cells, take the first N.
-  const mineCount = cfg.mineCount
-  const candidates: number[] = []
-  for (let i = 0; i < total; i++) {
-    if (!reserved.has(i)) candidates.push(i)
+  // Cells within blast reach of the centre — mines here can hit the Boss.
+  const centreCells: number[] = []
+  for (let dy = -cfg.blastRadiusCap; dy <= cfg.blastRadiusCap; dy++) {
+    for (let dx = -cfg.blastRadiusCap; dx <= cfg.blastRadiusCap; dx++) {
+      const nx = boss.x + dx
+      const ny = boss.y + dy
+      const i = idx(width, nx, ny)
+      if (nx >= 0 && ny >= 0 && nx < width && ny < height && !reserved.has(i)) centreCells.push(i)
+    }
   }
-  rng.shuffle(candidates)
-  const mineCells = new Set(candidates.slice(0, Math.min(mineCount, candidates.length)))
+  // Guarantee enough near-centre mines to kill the Boss by blasts alone (with headroom).
+  const minCentreMines = Math.min(centreCells.length, Math.ceil(cfg.bossHp / cfg.stackCap) + 3)
+
+  const mineCells = new Set<number>()
+  rng.shuffle(centreCells)
+  for (let i = 0; i < minCentreMines; i++) mineCells.add(centreCells[i]!)
+
+  // Fill the remaining mines from anywhere non-reserved, non-mine.
+  const rest: number[] = []
+  for (let i = 0; i < total; i++) {
+    if (!reserved.has(i) && !mineCells.has(i)) rest.push(i)
+  }
+  rng.shuffle(rest)
+  for (let i = 0; i < rest.length && mineCells.size < cfg.mineCount; i++) mineCells.add(rest[i]!)
 
   const hardness = buildHardnessField(rng, width, height)
 
@@ -162,24 +184,18 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
       const i = idx(width, x, y)
       const isMine = mineCells.has(i)
 
+      // Tier is cosmetic — it only picks which enemy sprite shows. HP is always 1.
       let tier: Tier = rng.weighted(cfg.tierWeights)
       const h = hardness(x, y)
-      // Occasionally bump a tile up the ramp inside a hard-ground cluster — mostly by a
-      // single step, so tough enemies stay rarer than commons rather than flooding.
-      if (rng.chance(cfg.hardGroundGradient * h)) {
-        tier = upgradeTier(tier, rng.chance(0.2) ? 2 : 1)
-      }
-
-      const band = cfg.bands[tier]
-      const hp = rng.int(band.minHp, band.maxHp)
+      if (rng.chance(cfg.hardGroundGradient * h)) tier = upgradeTier(tier, rng.chance(0.2) ? 2 : 1)
 
       tiles[i] = {
         x,
         y,
         isMine,
         tier,
-        hp,
-        maxHp: hp,
+        hp: 1,
+        maxHp: 1,
         state: 'covered',
         mineCharge: isMine ? 1 : 0,
         adjacent: 0,
@@ -188,24 +204,11 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
     }
   }
 
-  // Force the opening tile to Common so the guaranteed first tap is safe and cheap.
-  const openTile = tiles[idx(width, opening.x, opening.y)]!
-  if (openTile.tier !== 'common') {
-    const band = cfg.bands.common
-    ;(openTile as { tier: Tier }).tier = 'common'
-    openTile.hp = rng.int(band.minHp, band.maxHp)
-    ;(openTile as { maxHp: number }).maxHp = openTile.hp
-  }
-
-  // Pin the boss: a single, far tougher ground tile at centre — the end-game problem.
+  // Pin the boss: the single multi-hit tile at centre — the end-game problem.
   const bossTile = tiles[bossIdx]!
-  const bossBand = cfg.bands.boss
   ;(bossTile as { tier: Tier }).tier = 'boss'
-  bossTile.hp = rng.int(bossBand.minHp, bossBand.maxHp)
-  ;(bossTile as { maxHp: number }).maxHp = bossTile.hp
-
-  // No reachability guarantee is needed: every tough tile can be hand-chipped (slowly), so a
-  // board can never soft-lock even if a tile is out of any mine's blast range.
+  bossTile.hp = cfg.bossHp
+  ;(bossTile as { maxHp: number }).maxHp = cfg.bossHp
 
   // Adjacency counts for ground tiles.
   const board: Board = { width, height, tiles, opening, mineCount: mineCells.size }

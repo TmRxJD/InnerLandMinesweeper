@@ -48,7 +48,9 @@ function parseArgs(argv: string[]): Args {
     moves: get('--moves'),
     auto: has('--auto'),
     n: Number(get('--n') ?? '1'),
-    spm: Number(get('--spm') ?? '0'),
+    // Seconds of game-time per bot action (advances the clock + regen). Auto-play needs > 0
+    // or the bot goes broke and stalls; interactive/scripted modes don't tick at all.
+    spm: Number(get('--spm') ?? '1'),
   }
 }
 
@@ -86,8 +88,8 @@ function render(snap: BoardSnapshot, cfg: (typeof DIFFICULTIES)[Difficulty], min
     lines.push(`${String(y).padStart(2)}  ${row}`)
   }
   const hud =
-    `Charge ${snap.playerCharge}/${cfg.maxPlayerCharge}  Time ${fmtTime(snap.timeRemaining)}  ` +
-    `Moves ${snap.moves}  [${snap.status}]`
+    `Charge ${snap.playerCharge}/${cfg.maxPlayerCharge}  Time ${fmtTime(snap.timeElapsed)}  ` +
+    `Boss ${snap.bossHp}/${snap.bossMaxHp}  Moves ${snap.moves}  [${snap.status}]`
   return `${hud}\n${lines.join('\n')}`
 }
 
@@ -140,18 +142,19 @@ function runAuto(diff: Difficulty, seed: string, spm: number): ReturnType<Minesw
 }
 
 function autoSweep(diff: Difficulty, n: number, spm: number): void {
-  let wins = 0
-  let clearedSum = 0
+  const times: number[] = []
   let movesSum = 0
   for (let i = 0; i < n; i++) {
     const r = runAuto(diff, `cli-${diff}-${i}`, spm)
-    if (r?.outcome === 'won') wins++
-    clearedSum += r?.boardClearedFraction ?? 0
+    times.push(r?.timeSeconds ?? 0)
     movesSum += r?.moves ?? 0
   }
+  times.sort((a, b) => a - b)
+  const median = times[Math.floor(times.length / 2)] ?? 0
+  const avg = Math.round(times.reduce((s, t) => s + t, 0) / n)
   console.log(
-    `[${diff}] bot over ${n}: win ${Math.round((wins / n) * 100)}%  ` +
-      `avg cleared ${Math.round((clearedSum / n) * 100)}%  avg moves ${Math.round(movesSum / n)}`,
+    `[${diff}] bot over ${n}: median ${median}s  avg ${avg}s  ` +
+      `(fastest ${times[0]}s, slowest ${times[times.length - 1]}s)  avg moves ${Math.round(movesSum / n)}`,
   )
 }
 

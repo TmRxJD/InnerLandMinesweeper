@@ -437,7 +437,6 @@ export class GameApp {
           this.flashChargeUp(e.coord, e.to)
           break
         case 'gameWon':
-        case 'gameLost':
           this.onEnd(e.result)
           break
       }
@@ -470,8 +469,7 @@ export class GameApp {
     this.elCharge.textContent = `${snap.playerCharge}/${maxCharge}`
     const pct = Math.max(0, Math.min(100, (snap.playerCharge / maxCharge) * 100))
     this.elChargeFill.style.setProperty('--charge-pct', `${pct}%`)
-    this.elTime.textContent = this.fmtTime(snap.timeRemaining)
-    this.elTimeStat.classList.toggle('is-low', snap.timeRemaining <= 30)
+    this.elTime.textContent = this.fmtTime(snap.timeElapsed)
     this.elMoves.textContent = String(snap.moves)
     this.updateCoach(snap)
   }
@@ -544,12 +542,11 @@ export class GameApp {
 
   private onEnd(result: GameResult): void {
     this.stopLoop()
-    const win = result.outcome === 'won'
-    this.banner.classList.add('is-shown', win ? 'win' : 'lose')
-    this.banner.querySelector('.ilm-banner__title')!.textContent = win ? 'Swept' : "Time's up"
-    this.banner.querySelector('.ilm-banner__detail')!.textContent = win
-      ? `Score ${result.score} · ${result.timeRemaining}s left · best chain ${result.maxChain} · ${result.cracks} cracks`
-      : `Cleared ${Math.round(result.boardClearedFraction * 100)}% · ${result.cracks} cracks`
+    this.banner.classList.add('is-shown', 'win')
+    const medal = result.medal === 'none' ? '' : `${result.medal.toUpperCase()} · `
+    this.banner.querySelector('.ilm-banner__title')!.textContent = 'Cleared'
+    this.banner.querySelector('.ilm-banner__detail')!.textContent =
+      `${medal}${this.fmtTime(result.timeSeconds)} · ${result.detonations} blasts · ${result.moves} moves`
     this.onResult?.(result)
   }
 
