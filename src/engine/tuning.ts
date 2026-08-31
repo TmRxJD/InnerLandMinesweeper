@@ -69,7 +69,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 13,
     height: 13,
     mineCount: 24, // ~14% of 169
-    hookCount: 4,
+    hookCount: 8,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
     bossHp: 18,
@@ -90,7 +90,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 17,
     height: 17,
     mineCount: 40, // ~14% of 289
-    hookCount: 6,
+    hookCount: 13,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
     bossHp: 28,
@@ -111,7 +111,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 21,
     height: 21,
     mineCount: 62, // ~14% of 441
-    hookCount: 9,
+    hookCount: 20,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
     bossHp: 40,

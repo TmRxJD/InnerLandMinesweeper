@@ -124,6 +124,7 @@ function runAuto(diff: Difficulty, seed: string, spm: number): ReturnType<Minesw
     const action = autoPlay(snap)
     if (action) {
       if (action.type === 'reveal') engine.reveal(action.coord)
+      else if (action.type === 'hook') engine.useHook(action.coord)
       else engine.detonate(action.coord)
     }
     t += spm

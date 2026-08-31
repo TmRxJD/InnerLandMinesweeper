@@ -83,14 +83,15 @@ export class GameApp {
   private elChargeFill!: HTMLElement
   private elTime!: HTMLElement
   private elTimeStat!: HTMLElement
-  private elHookBtn!: HTMLButtonElement
   private elHookCount!: HTMLElement
   private elBossBar!: HTMLElement
   private elBossFill!: HTMLElement
   private elBossHp!: HTMLElement
   private elCoach!: HTMLElement
-  /** True while the player has armed the hook and the next armed-mine click will pull it. */
-  private hookMode = false
+  /** Pending long-press timer id for touch-triggered hook pulls. */
+  private hookHold: ReturnType<typeof setTimeout> | null = null
+  /** Set when a long-press already acted, so the trailing synthetic click is ignored. */
+  private suppressNextClick = false
   private helpDialog!: HTMLElement
 
   private width = 0
@@ -129,7 +130,6 @@ export class GameApp {
     this.elChargeFill = root.querySelector('.ilm-chargebar__fill')!
     this.elTime = root.querySelector('[data-time]')!
     this.elTimeStat = root.querySelector('.ilm-stat--time')!
-    this.elHookBtn = root.querySelector('[data-hook]')!
     this.elHookCount = root.querySelector('[data-hookcount]')!
     this.elBossBar = root.querySelector('[data-bossbar]')!
     this.elBossFill = root.querySelector('[data-bossfill]')!
@@ -179,10 +179,10 @@ export class GameApp {
             <span class="ilm-stat__label">Time</span>
             <span class="ilm-stat__value" data-time>0:00</span>
           </div>
-          <button class="ilm-stat ilm-stat--hook" data-hook type="button" aria-pressed="false" disabled>
-            <span class="ilm-stat__label">Hook</span>
+          <div class="ilm-stat ilm-stat--hook">
+            <span class="ilm-stat__label">Hooks</span>
             <span class="ilm-stat__value" data-hookcount>0</span>
-          </button>
+          </div>
         </div>
         <div class="ilm-bossbar" data-bossbar hidden>
           <span class="ilm-bossbar__label">Boss</span>
@@ -279,9 +279,6 @@ export class GameApp {
     this.root.querySelector('[data-demo]')!.addEventListener('click', () => this.toggleDemo())
     this.root.querySelector('[data-hints]')!.addEventListener('click', () => this.toggleHints())
     this.root.querySelector('[data-help]')!.addEventListener('click', () => this.openHelp())
-    this.elHookBtn.addEventListener('click', () => {
-      if (this.engine.snapshot().hookCharges > 0) this.setHookMode(!this.hookMode)
-    })
     this.root.querySelectorAll('[data-help-close]').forEach(el => {
       el.addEventListener('click', () => this.closeHelp())
     })
@@ -383,6 +380,24 @@ export class GameApp {
       btn.setAttribute('role', 'gridcell')
       btn.tabIndex = i === 0 ? 0 : -1
       btn.addEventListener('click', () => this.onTileClick(t.coord))
+      // Right-click pulls a hook (desktop). Suppress the context menu regardless.
+      btn.addEventListener('contextmenu', e => {
+        e.preventDefault()
+        this.onHookTrigger(t.coord)
+      })
+      // Long-press pulls a hook (touch). Cancel on move/release/scroll.
+      btn.addEventListener('touchstart', () => {
+        this.clearHookHold()
+        this.hookHold = setTimeout(() => {
+          this.hookHold = null
+          this.suppressNextClick = true // the long-press already acted; don't also detonate
+          this.onHookTrigger(t.coord)
+        }, 450)
+      }, { passive: true })
+      const cancel = (): void => this.clearHookHold()
+      btn.addEventListener('touchend', cancel)
+      btn.addEventListener('touchmove', cancel)
+      btn.addEventListener('touchcancel', cancel)
       this.board.appendChild(btn)
       return btn
     })
@@ -390,26 +405,24 @@ export class GameApp {
 
   // -- input -------------------------------------------------------------
 
+  private clearHookHold(): void {
+    if (this.hookHold !== null) {
+      clearTimeout(this.hookHold)
+      this.hookHold = null
+    }
+  }
+
   private onTileClick(coord: Coord): void {
+    if (this.suppressNextClick) { this.suppressNextClick = false; return } // a long-press already acted
     if (this.demo) this.stopDemo() // a real interaction takes control from the demo
     if (this.engine.snapshot().status !== 'playing' || this.paused) return
     const tile = this.tileView(coord)
     if (!tile) return
 
     if (tile.state === 'armed') {
-      // In hook-mode, clicking an armed mine pulls it toward the boss (crushing what's in the
-      // way) instead of detonating; leave hook-mode afterward.
-      if (this.hookMode) {
-        const events = this.engine.useHook(coord)
-        this.setHookMode(false)
-        this.apply(events)
-        return
-      }
       this.apply(this.engine.detonate(coord))
       return
     }
-    // A click anywhere that isn't an armed mine cancels a pending hook.
-    if (this.hookMode) this.setHookMode(false)
     if (tile.state !== 'covered' && tile.state !== 'cracked') return
     // Tapping a tough tile chips it slowly (engine caps hand-tap damage); a blast is faster.
 
@@ -489,12 +502,15 @@ export class GameApp {
     this.pulseTile(coord, 'charge-up')
   }
 
-  /** Enter/leave hook-targeting: the board highlights armed mines and the next one clicked is
-   *  pulled toward the boss. */
-  private setHookMode(on: boolean): void {
-    this.hookMode = on && this.engine.snapshot().hookCharges > 0
-    this.root.classList.toggle('hook-mode', this.hookMode)
-    this.elHookBtn.setAttribute('aria-pressed', String(this.hookMode))
+  /** Right-click (desktop) or long-press (touch) an armed mine to spend a hook charge and pull
+   *  it one tile toward the boss. A no-op with no charge or on a non-armed tile. */
+  private onHookTrigger(coord: Coord): void {
+    if (this.demo) this.stopDemo()
+    if (this.engine.snapshot().status !== 'playing' || this.paused) return
+    if (this.engine.snapshot().hookCharges < 1) return
+    const tile = this.tileView(coord)
+    if (!tile || tile.state !== 'armed') return
+    this.apply(this.engine.useHook(coord))
   }
 
   private render(snap: BoardSnapshot): void {
@@ -506,11 +522,7 @@ export class GameApp {
     const pct = Math.max(0, Math.min(100, (snap.playerCharge / maxCharge) * 100))
     this.elChargeFill.style.setProperty('--charge-pct', `${pct}%`)
     this.elTime.textContent = this.fmtTime(snap.timeElapsed)
-    // Hook stat: count + enabled only when a charge is held; drop hook-mode if we run dry.
     this.elHookCount.textContent = String(snap.hookCharges)
-    this.elHookBtn.disabled = snap.hookCharges < 1
-    if (snap.hookCharges < 1 && this.hookMode) this.setHookMode(false)
-    this.elHookBtn.setAttribute('aria-pressed', String(this.hookMode))
     // Boss bar: show once the boss has taken a hit (it's covered/full at first).
     const bossPct = snap.bossMaxHp > 0 ? (snap.bossHp / snap.bossMaxHp) * 100 : 0
     this.elBossBar.hidden = snap.bossHp >= snap.bossMaxHp
@@ -571,17 +583,17 @@ export class GameApp {
       el.innerHTML = ''
       label = 'detonated crater'
     } else {
-      // covered or cracked — the enemy sprite is a mask filled with the class colour, with
-      // a health bar shown from the start (full until you damage it).
+      // covered or cracked — the enemy sprite is a mask filled with the class colour. Ordinary
+      // enemies are 1 HP (no bar); only the multi-hit Boss shows a tile HP bar.
       const sprite = `<span class="ilm-enemy" style="--sprite:url(${spriteFor(t.tier, t.coord.x, t.coord.y)})"></span>`
       const crack = t.crack ?? 0
       if (t.state === 'cracked') el.style.setProperty('--crack', String(crack))
-      const hp = Math.max(0, 1 - crack)
+      const hpBar = t.tier === 'boss' ? `<span class="ilm-hp" style="--hp:${Math.max(0, 1 - crack)}"></span>` : ''
       // A Magnetic Hook bonus sits on top of the enemy — a visible objective to route to.
       const hook = t.isHook ? '<span class="ilm-hookmark" aria-hidden="true">⌇</span>' : ''
       if (t.isHook) el.classList.add('is-hook')
-      el.innerHTML = `${sprite}<span class="ilm-hp" style="--hp:${hp}"></span>${hook}`
-      label = t.isHook ? `${cls} enemy with a Magnetic Hook` : t.state === 'cracked' ? `${cls} enemy, ${Math.round(hp * 100)}% health` : `${cls} enemy`
+      el.innerHTML = `${sprite}${hpBar}${hook}`
+      label = t.isHook ? `${cls} enemy with a Magnetic Hook` : `${cls} enemy`
     }
     el.setAttribute('aria-label', label)
     // Preserve roving tabindex.
@@ -662,7 +674,8 @@ export class GameApp {
       if (t.state === 'covered' || t.state === 'cracked') covered++
       else if (t.state === 'armed') armed++
     }
-    return `${covered}|${armed}|${snap.playerCharge}`
+    // Boss HP + hook charges count too, so chipping the Boss or hooking a mine reads as progress.
+    return `${covered}|${armed}|${snap.playerCharge}|${snap.bossHp}|${snap.hookCharges}`
   }
 
   private demoStuck = 0
@@ -706,8 +719,9 @@ export class GameApp {
     )
   }
 
-  private performAction(action: { type: 'reveal' | 'detonate'; coord: Coord }): void {
+  private performAction(action: { type: 'reveal' | 'detonate' | 'hook'; coord: Coord }): void {
     if (action.type === 'detonate') this.apply(this.engine.detonate(action.coord))
+    else if (action.type === 'hook') this.apply(this.engine.useHook(action.coord))
     else this.apply(this.engine.reveal(action.coord))
   }
 

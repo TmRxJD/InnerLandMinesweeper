@@ -587,29 +587,7 @@
 
 /* ---- Magnetic Hook + Boss bar --------------------------------------- */
 
-.ilm-stat--hook {
-  appearance: none;
-  border: 1px solid var(--tile-edge);
-  background: color-mix(in srgb, var(--energy) 8%, transparent);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease, opacity 140ms ease;
-}
-.ilm-stat--hook:disabled { opacity: 0.4; cursor: default; }
-.ilm-stat--hook[aria-pressed='true'] {
-  border-color: var(--energy);
-  background: color-mix(in srgb, var(--energy) 22%, transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--energy) 40%, transparent);
-}
-
-/* While targeting a hook pull, dim the board and spotlight armed mines. */
-.ilm-root.hook-mode .ilm-board { cursor: crosshair; }
-.ilm-root.hook-mode .ilm-tile.is-armed {
-  outline: 2px solid var(--energy);
-  outline-offset: -2px;
-  animation: ilm-pulse 0.9s ease-in-out infinite;
-}
-
+/* Hook is a plain stat, styled like Charge/Time (neutral label + value). */
 .ilm-hookmark {
   position: absolute;
   top: 1px;

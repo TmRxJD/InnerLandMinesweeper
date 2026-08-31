@@ -17,7 +17,7 @@ import { blastRadiusForStack } from './tuning'
 import type { BoardSnapshot, Coord, TileView } from './types'
 
 export interface AutoAction {
-  readonly type: 'reveal' | 'detonate'
+  readonly type: 'reveal' | 'detonate' | 'hook'
   readonly coord: Coord
 }
 
@@ -60,6 +60,24 @@ function bestMine(mines: TileView[], snap: BoardSnapshot): { mine: TileView; val
   return { mine: best, value: bestVal }
 }
 
+/** Would a hook pull on `mine` land on guaranteed-empty ground (so it can't be a wasted no-op)?
+ *  Checks the dominant-axis inward step, then the other, for a cleared/detonated/cracked cell
+ *  (all guaranteed non-mine). */
+function hookStepClear(mine: TileView, boss: Coord, snap: BoardSnapshot): boolean {
+  const sx = Math.sign(boss.x - mine.coord.x)
+  const sy = Math.sign(boss.y - mine.coord.y)
+  const xFirst = Math.abs(boss.x - mine.coord.x) >= Math.abs(boss.y - mine.coord.y)
+  const steps = xFirst
+    ? [{ x: mine.coord.x + sx, y: mine.coord.y }, { x: mine.coord.x, y: mine.coord.y + sy }]
+    : [{ x: mine.coord.x, y: mine.coord.y + sy }, { x: mine.coord.x + sx, y: mine.coord.y }]
+  for (const s of steps) {
+    if (s.x === mine.coord.x && s.y === mine.coord.y) continue
+    const t = snap.tiles[s.y * snap.width + s.x]
+    if (t && t.tier !== 'boss' && (t.state === 'cleared' || t.state === 'detonated' || t.state === 'cracked')) return true
+  }
+  return false
+}
+
 function hasRevealedNeighbour(t: TileView, snap: BoardSnapshot, w: number): boolean {
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
@@ -82,10 +100,20 @@ export function autoPlay(snap: BoardSnapshot): AutoAction | null {
     return null
   }
 
-  // 1. Detonate. Two regimes:
+  // 1. Detonate / hook.
   if (mines.length > 0) {
     const boss = { x: (snap.width - 1) / 2 | 0, y: (snap.height - 1) / 2 | 0 }
     const reaches = (m: TileView) => blastRadiusForStack(m.mineCharge ?? 1, RADIUS_CAP) >= cheb(m.coord, boss)
+
+    // Hook delivery: if we hold a charge and the Boss lives, walk our best out-of-range stack
+    // one tile inward along cleared ground — this is how a charged mine reaches the centre.
+    if (snap.bossHp > 0 && snap.hookCharges > 0) {
+      const deliverable = mines
+        .filter(m => (m.mineCharge ?? 1) >= 3 && !reaches(m) && cheb(m.coord, boss) > 1 && hookStepClear(m, boss, snap))
+        .sort((a, b) => (b.mineCharge ?? 1) - (a.mineCharge ?? 1) || cheb(a.coord, boss) - cheb(b.coord, boss))
+      if (deliverable[0]) return { type: 'hook', coord: deliverable[0].coord }
+    }
+
     const usable = mines.filter(m => blastValue(m, snap) > 0)
     if (snap.bossHp > 0 && usable.some(reaches)) {
       // Boss endgame: don't dribble low-stack hits at the Boss. If a mine can kill it, fire.
