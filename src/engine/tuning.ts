@@ -81,6 +81,12 @@ const SHARED_BANDS: Record<Tier, TierBand> = {
   boss: { minHp: 60, maxHp: 90 },
 }
 
+/** The ordinary classes share one HP ramp across difficulties; only the Boss scales, so its
+ *  end-game grind grows with the mode instead of being an identical slog on Easy and Hard. */
+function bandsWithBoss(minHp: number, maxHp: number): Record<Tier, TierBand> {
+  return { ...SHARED_BANDS, boss: { minHp, maxHp } }
+}
+
 export const SCORE_CHAIN_WEIGHT = 25
 export const SCORE_CRACK_WEIGHT = 15
 
@@ -93,7 +99,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     tierWeights: { common: 13, advanced: 4, elite: 1.6, fleet: 0.5, boss: 0 },
     hardGroundGradient: 0.16,
     maxMineCharge: 6,
-    bands: SHARED_BANDS,
+    bands: bandsWithBoss(40, 55),
     timerSeconds: 300,
     startingCharge: 9,
     maxPlayerCharge: 10,
@@ -114,7 +120,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     tierWeights: { common: 11, advanced: 4.5, elite: 2.2, fleet: 0.9, boss: 0 },
     hardGroundGradient: 0.2,
     maxMineCharge: 6,
-    bands: SHARED_BANDS,
+    bands: bandsWithBoss(60, 85),
     timerSeconds: 420,
     startingCharge: 9,
     maxPlayerCharge: 10,
@@ -135,7 +141,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
     hardGroundGradient: 0.26,
     maxMineCharge: 7,
-    bands: SHARED_BANDS,
+    bands: bandsWithBoss(90, 120),
     timerSeconds: 1000,
     startingCharge: 12,
     maxPlayerCharge: 14,
