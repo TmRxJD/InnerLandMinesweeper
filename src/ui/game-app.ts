@@ -31,6 +31,11 @@ import enemyCommander from './assets/enemy-commander.webp'
 import enemyOvercharge from './assets/enemy-overcharge.webp'
 import enemyBoss from './assets/enemy-boss.webp'
 
+/** DEV/testing flag: append `?showhooks` to the URL to mark Magnetic Hook tiles on the board.
+ *  Off by default — in normal play hooks are a hidden discovery, not a signposted objective. */
+const REVEAL_HOOKS =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('showhooks')
+
 /** Each tier maps to the real enemy category's members; a tile picks one deterministically. */
 const ENEMY_SETS: Record<Tier, readonly string[]> = {
   common: [enemyBasic, enemyFast, enemyTank],
@@ -244,10 +249,10 @@ export class GameApp {
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon" style="color:var(--energy)">⌇</span>
-            <div><b>Magnetic Hook.</b> Clear a marked <b style="color:var(--energy)">Hook tile</b> (cyan
-              outline) to earn a charge — shown in the HUD. <b>Right-click</b> (or <b>long-press</b>) an
-              armed mine to pull it one tile toward the Boss, crushing whatever's in the way. It's how
-              you deliver a big stack the last step to the centre.</div>
+            <div><b>Magnetic Hook.</b> Some tiles hide a <b style="color:var(--energy)">Magnetic Hook</b> —
+              clear them and your <b>Hooks</b> count (in the HUD) ticks up. <b>Right-click</b> (or
+              <b>long-press</b>) an armed mine to spend one and pull it a tile toward the Boss, crushing
+              whatever's in the way — how you deliver a big stack the last step to the centre.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
@@ -315,7 +320,7 @@ export class GameApp {
   newGame(difficulty: Difficulty, seed: string): void {
     this.difficulty = difficulty
     this.seed = seed
-    this.engine = createEngine({ difficulty, seed, now: () => performance.now() / 1000 })
+    this.engine = createEngine({ difficulty, seed, now: () => performance.now() / 1000, revealHooks: REVEAL_HOOKS })
     const snap = this.engine.snapshot()
     this.width = snap.width
     this.height = snap.height

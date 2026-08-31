@@ -161,6 +161,9 @@ export interface EngineOptions {
   readonly seed: string
   /** Injectable clock in seconds, for the headless harness. Defaults to wall time. */
   readonly now?: () => number
+  /** DEV/testing only: when true, covered Magnetic Hook tiles expose `isHook` in snapshots so
+   *  a debug view can mark them. Off in normal play — hooks are a discovery, not a signpost. */
+  readonly revealHooks?: boolean
 }
 
 /**

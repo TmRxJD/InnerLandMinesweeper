@@ -210,16 +210,20 @@ describe('magnetic hook', () => {
     }
   })
 
-  it('clearing a hook tile grants a charge; a covered hook is visible in the snapshot', () => {
+  it('clearing a hook tile grants a charge; hooks are hidden unless revealHooks (dev)', () => {
     const board = truth('hook-collect')
     const hook = board.tiles.find(t => t.isHook)!
-    const engine = createEngine({ difficulty: DIFF, seed: 'hook-collect' })
-    const v = engine.snapshot().tiles.find(t => t.coord.x === hook.x && t.coord.y === hook.y)!
-    expect(v.isHook).toBe(true) // routable while covered
-    expect(engine.snapshot().hookCharges).toBe(0)
-    const events = engine.reveal({ x: hook.x, y: hook.y })
+    // Normal play: a covered hook is indistinguishable from ground (no signpost).
+    const prod = createEngine({ difficulty: DIFF, seed: 'hook-collect' })
+    expect(prod.snapshot().tiles.find(t => t.coord.x === hook.x && t.coord.y === hook.y)!.isHook).toBeUndefined()
+    // Dev/testing: revealHooks exposes it so a debug view can mark it.
+    const dev = createEngine({ difficulty: DIFF, seed: 'hook-collect', revealHooks: true })
+    expect(dev.snapshot().tiles.find(t => t.coord.x === hook.x && t.coord.y === hook.y)!.isHook).toBe(true)
+    // Clearing grants a charge either way.
+    expect(prod.snapshot().hookCharges).toBe(0)
+    const events = prod.reveal({ x: hook.x, y: hook.y })
     expect(events.some(e => e.kind === 'hookCharged')).toBe(true)
-    expect(engine.snapshot().hookCharges).toBe(1)
+    expect(prod.snapshot().hookCharges).toBe(1)
   })
 
   it('pulls an armed mine one tile toward the boss, crushing the enemy in the way', () => {

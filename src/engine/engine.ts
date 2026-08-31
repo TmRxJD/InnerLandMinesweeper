@@ -34,6 +34,7 @@ class Engine implements MinesweeperEngine {
   private readonly board: Board
   private readonly difficulty: Difficulty
   private readonly seed: string
+  private readonly revealHooks: boolean
 
   private playerCharge: number
   private timeElapsed = 0
@@ -53,6 +54,7 @@ class Engine implements MinesweeperEngine {
     this.cfg = DIFFICULTIES[opts.difficulty]
     this.difficulty = opts.difficulty
     this.seed = opts.seed
+    this.revealHooks = opts.revealHooks ?? false
     this.board = generateBoard(this.cfg, opts.seed)
     this.playerCharge = this.cfg.startingCharge
     this.groundTotal = this.board.tiles.filter(t => !t.isMine).length
@@ -405,8 +407,9 @@ class Engine implements MinesweeperEngine {
       case 'armed':
         return { ...base, mineCharge: t.mineCharge }
       default:
-        // A covered Magnetic Hook tile is shown as such (a visible bonus to route to).
-        return t.isHook ? { ...base, isHook: true } : base
+        // Hooks are hidden in normal play — a discovery, not a signpost. Only a dev/testing
+        // build (revealHooks) exposes them so a debug view can mark them.
+        return t.isHook && this.revealHooks ? { ...base, isHook: true } : base
     }
   }
 }

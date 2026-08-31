@@ -100,10 +100,11 @@ always killable by blasts alone — you never need a hand-tap fallback (there is
 
 A single-use, earnable, repeatable delivery tool — the game's main expression of *routing* skill.
 
-- **Earn it.** Magnetic Hook bonus tiles sit on the field in the **outer/mid rings only** (never near
-  the centre, so you can't farm them by tapping around the Boss). They're **visible while covered**
-  (a cyan outline + `⌇` mark) so you can decide whether the detour is worth it. Clearing one — by tap
-  or blast — grants **+1 hook charge** (shown in the HUD; you can hold several).
+- **Earn it.** Magnetic Hook bonus tiles hide on the field in the **outer/mid rings only** (never near
+  the centre, so you can't farm them by tapping around the Boss). They are **not marked** — a hook is a
+  *discovery*: clearing a tile that hides one — by tap or blast — grants **+1 hook charge** (the HUD
+  **Hooks** count ticks up; you can hold several). *(A dev/testing build can mark them: `?showhooks` in
+  the browser, `--debug` in the CLI.)*
 - **Spend it.** **Right-click** (desktop) or **long-press** (touch) an armed mine to pull it **one
   tile toward the Boss** (dominant axis first). It slides into cleared ground, or **crushes** the
   enemy in the way (a free clear); it can't move onto another mine, onto the Boss, or off-grid.

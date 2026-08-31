@@ -180,6 +180,7 @@ async function main(): Promise<void> {
     difficulty: args.diff,
     seed: args.seed,
     now: () => Date.now() / 1000,
+    revealHooks: args.debug, // --debug marks hooks (H), like it marks mines (✱)
   })
   const mineSet = args.debug ? mineSetFor(args.diff, args.seed) : null
   const show = (): void => console.log('\n' + render(engine.snapshot(), cfg, mineSet) + '\n')
