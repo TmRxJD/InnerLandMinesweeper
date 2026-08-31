@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Inner Land Minesweeper</title>
     <style>
-      html, body { margin: 0; min-height: 100%; background: transparent; }
-      /* Embedded in a host iframe: fill the width the host gives us and let the game measure a
-         real available width. The host sizes the iframe height from our posted content height. */
+      /* The game panel doesn't paint a full-bleed ground, so the host body must — otherwise the
+         host's card shows through the (transparent) iframe as a white surround. Use the game's own
+         dark ground so the embed is self-consistent in any host theme. */
+      html, body { margin: 0; min-height: 100%; background: #05070c; }
+      /* Fill the width the host gives us and let the game measure a real available width. The host
+         sizes the iframe height from our posted content height. */
       body { padding: 8px 6px; }
       #app { width: 100%; max-width: 720px; margin: 0 auto; }
     </style>
