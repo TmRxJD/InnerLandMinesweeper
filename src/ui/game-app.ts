@@ -313,8 +313,10 @@ export class GameApp {
     this.startLoop()
   }
 
-  /** Size tiles so the board fits the viewport width, clamped to a comfortable touch
-   *  target. Pinch-zoom covers the smallest cases (dense boards on tiny screens). */
+  /** Size tiles so the whole board fits BOTH the viewport width and its remaining height,
+   *  clamped to a comfortable touch target. A square board sized to width alone overflows
+   *  vertically on the big (15×15) grid, so we take whichever dimension binds. Pinch-zoom
+   *  covers the smallest cases (dense boards on tiny screens). */
   private fitBoard(): void {
     const gap = 3
     // Measure the mount parent (a real block constrained by the viewport), NOT the root —
@@ -322,9 +324,22 @@ export class GameApp {
     const cs = getComputedStyle(this.root)
     const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
     const outer = this.root.parentElement?.clientWidth || document.documentElement.clientWidth || 620
-    const avail = outer - padX
-    if (avail <= 0) return // not laid out yet
-    const raw = (avail - (this.width - 1) * gap) / this.width
+    const availW = outer - padX
+    if (availW <= 0) return // not laid out yet
+    const rawW = (availW - (this.width - 1) * gap) / this.width
+
+    // Height budget: from the board's top edge down to the bottom of the viewport, less a
+    // little breathing room. The board's top doesn't depend on tile size (the header/HUD
+    // above it have fixed heights), so this measurement is stable and won't feed back.
+    let raw = rawW
+    const viewportH = document.documentElement.clientHeight
+    const boardTop = this.board.getBoundingClientRect().top
+    const availH = viewportH - boardTop - (parseFloat(cs.paddingBottom) + 12)
+    if (availH > 0) {
+      const rawH = (availH - (this.height - 1) * gap) / this.height
+      raw = Math.min(rawW, rawH)
+    }
+
     // Floor of 18px keeps a dense board (15 cols) inside a ~375px phone; pinch-zoom covers
     // precision. Ceiling of 44px stops tiles ballooning on wide screens.
     const size = Math.max(18, Math.min(44, Math.floor(raw)))
