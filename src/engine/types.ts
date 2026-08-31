@@ -58,6 +58,9 @@ export interface TileView {
   readonly crack?: number
   /** Charge multiplier, present only for an uncovered (armed) mine. */
   readonly mineCharge?: number
+  /** True for a still-covered Magnetic Hook tile — a visible bonus you can route to. Clearing
+   *  it grants a hook charge. Never set on a mine (hooks are always non-mine tiles). */
+  readonly isHook?: boolean
 }
 
 export type TileState =
@@ -84,6 +87,8 @@ export interface BoardSnapshot {
   /** Current / starting Boss HP — for the HUD boss bar. */
   readonly bossHp: number
   readonly bossMaxHp: number
+  /** Held Magnetic Hook charges — spend one to pull an armed mine a tile toward the Boss. */
+  readonly hookCharges: number
 }
 
 // There is no 'lost' — the board is always completable and the clock is only the score.
@@ -110,7 +115,12 @@ export type GameEvent =
   | { kind: 'mineDetonated'; coord: Coord; intensity: number; radius: readonly Coord[] }
   | { kind: 'mineChargeChanged'; coord: Coord; from: number; to: number }
   | { kind: 'numberDecremented'; coord: Coord; from: number; to: number }
+  // A cleared number went up because a mine was hooked into range (numbers stay honest).
+  | { kind: 'numberIncremented'; coord: Coord; from: number; to: number }
   | { kind: 'playerChargeChanged'; from: number; to: number }
+  // A Magnetic Hook tile was collected (charge gained), or a charge was spent to pull a mine.
+  | { kind: 'hookCharged'; coord: Coord; to: number }
+  | { kind: 'hookUsed'; from: Coord; to: Coord; charges: number }
   | { kind: 'gameWon'; result: GameResult }
 
 export type CauseOfArming = 'click' | 'blast'
@@ -160,6 +170,10 @@ export interface EngineOptions {
 export interface MinesweeperEngine {
   reveal(coord: Coord): EventList
   detonate(coord: Coord): EventList
+  /** Spend one Magnetic Hook charge to pull the armed mine at `coord` one tile toward the
+   *  Boss (into cleared ground). No-op (empty list) if there is no charge, no armed mine
+   *  there, or no valid inward cell. */
+  useHook(coord: Coord): EventList
   /** Advance the timer; the harness calls this explicitly, the UI on a rAF/interval tick. */
   tick(deltaSeconds: number): EventList
   snapshot(): BoardSnapshot

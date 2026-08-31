@@ -37,6 +37,7 @@ class Engine implements MinesweeperEngine {
 
   private playerCharge: number
   private timeElapsed = 0
+  private hookCharges = 0
   private status: GameStatus = 'playing'
 
   private moves = 0
@@ -168,6 +169,7 @@ class Engine implements MinesweeperEngine {
       status: this.status,
       bossHp: this.bossHp(),
       bossMaxHp: this.cfg.bossHp,
+      hookCharges: this.hookCharges,
     }
   }
 
@@ -209,6 +211,7 @@ class Engine implements MinesweeperEngine {
     tile.hp = 0
     this.tilesCleared++
     events.push({ kind: 'tileCleared', coord: { x: tile.x, y: tile.y }, number: tile.adjacent, chargeSpent })
+    this.collectHook(tile, events)
   }
 
   private destroyGroundTile(tile: Tile, events: GameEvent[]): void {
@@ -217,6 +220,96 @@ class Engine implements MinesweeperEngine {
     tile.hp = 0
     this.tilesCleared++
     events.push({ kind: 'tileDestroyed', coord: { x: tile.x, y: tile.y } })
+    this.collectHook(tile, events)
+  }
+
+  /** Clearing a Magnetic Hook tile (by tap or blast) grants one hook charge. */
+  private collectHook(tile: Tile, events: GameEvent[]): void {
+    if (!tile.isHook) return
+    tile.isHook = false
+    this.hookCharges += 1
+    events.push({ kind: 'hookCharged', coord: { x: tile.x, y: tile.y }, to: this.hookCharges })
+  }
+
+  /** Spend a hook charge to pull the armed mine at `coord` one tile toward the Boss. It moves
+   *  one orthogonal step that strictly reduces its distance to centre, into already-cleared
+   *  ground (never through an enemy, onto another mine, onto the Boss, or off-grid). Adjacent
+   *  numbers are kept honest at both the old and new cell. */
+  useHook(coord: Coord): EventList {
+    if (this.status !== 'playing' || this.hookCharges < 1) return []
+    const mine = tileAt(this.board, coord.x, coord.y)
+    if (!mine || !mine.isMine || mine.state !== 'armed') return []
+
+    const bx = Math.floor(this.board.width / 2)
+    const by = Math.floor(this.board.height / 2)
+    // Candidate steps toward the boss, dominant axis first.
+    const steps: Coord[] = []
+    const sx = Math.sign(bx - mine.x)
+    const sy = Math.sign(by - mine.y)
+    if (Math.abs(bx - mine.x) >= Math.abs(by - mine.y)) {
+      if (sx) steps.push({ x: mine.x + sx, y: mine.y })
+      if (sy) steps.push({ x: mine.x, y: mine.y + sy })
+    } else {
+      if (sy) steps.push({ x: mine.x, y: mine.y + sy })
+      if (sx) steps.push({ x: mine.x + sx, y: mine.y })
+    }
+    // A valid inward cell is anything that isn't another mine or the Boss: empty ground, or a
+    // covered/cracked enemy — which the pull CRUSHES (a free clear) as the mine slides in.
+    const dest = steps
+      .map(s => tileAt(this.board, s.x, s.y))
+      .find(t => !!t && t.tier !== 'boss' && (t.state === 'cleared' || t.state === 'detonated' || ((t.state === 'covered' || t.state === 'cracked') && !t.isMine)))
+    if (!dest) return [] // no valid inward cell — nothing to do
+
+    const events: GameEvent[] = []
+    this.hookCharges -= 1
+    this.moveMine(mine, dest, events)
+    events.push({ kind: 'hookUsed', from: { x: coord.x, y: coord.y }, to: { x: dest.x, y: dest.y }, charges: this.hookCharges })
+    this.checkWin(events)
+    return events
+  }
+
+  /** Relocate an armed mine to a cleared destination cell, transferring its armed state and
+   *  stack, and re-deriving adjacency counts so revealed numbers stay truthful. */
+  private moveMine(mine: Tile, dest: Tile, events: GameEvent[]): void {
+    const stack = mine.mineCharge
+    // Old cell becomes cleared ground (no number leak — it was covered), its neighbours lose 1.
+    this.adjustNeighbourNumbers(mine, -1, events)
+    mine.isMine = false
+    mine.mineCharge = 0
+    mine.state = 'cleared'
+    mine.numberKnown = false
+    mine.hp = 0
+    // Recompute the vacated cell's own adjacency (it is ground now) — not shown (numberKnown
+    // false), but kept correct for consistency.
+    mine.adjacent = neighbours(this.board, mine.x, mine.y).filter(n => n.isMine).length
+    // If an enemy still occupies the destination, the pull crushes it (a free clear).
+    if (dest.state === 'covered' || dest.state === 'cracked') {
+      dest.hp = 0
+      this.tilesCleared++
+      events.push({ kind: 'tileDestroyed', coord: { x: dest.x, y: dest.y } })
+      this.collectHook(dest, events)
+    }
+    // New cell becomes the armed mine; its neighbours gain 1.
+    dest.isMine = true
+    dest.mineCharge = stack
+    dest.state = 'armed'
+    dest.numberKnown = false
+    this.adjustNeighbourNumbers(dest, +1, events)
+    events.push({ kind: 'mineArmed', coord: { x: dest.x, y: dest.y }, mineCharge: stack, via: 'blast' })
+  }
+
+  /** Add `delta` to every ground neighbour's live adjacent-mine count, emitting an event for
+   *  the ones whose number is currently shown. Used when a mine appears/leaves a cell. */
+  private adjustNeighbourNumbers(at: Tile, delta: number, events: GameEvent[]): void {
+    for (const n of neighbours(this.board, at.x, at.y)) {
+      if (n.isMine) continue
+      const from = n.adjacent
+      n.adjacent = Math.max(0, n.adjacent + delta)
+      if (n.state === 'cleared' && n.numberKnown && n.adjacent !== from) {
+        const kind = delta > 0 ? 'numberIncremented' : 'numberDecremented'
+        events.push({ kind, coord: { x: n.x, y: n.y }, from, to: n.adjacent })
+      }
+    }
   }
 
   // -- detonation helpers --------------------------------------------------
@@ -310,7 +403,8 @@ class Engine implements MinesweeperEngine {
       case 'armed':
         return { ...base, mineCharge: t.mineCharge }
       default:
-        return base
+        // A covered Magnetic Hook tile is shown as such (a visible bonus to route to).
+        return t.isHook ? { ...base, isHook: true } : base
     }
   }
 }

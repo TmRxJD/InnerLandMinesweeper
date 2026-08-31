@@ -14,7 +14,10 @@ const TIER_ORDER: readonly Tier[] = ['common', 'advanced', 'elite', 'fleet']
 export interface Tile {
   readonly x: number
   readonly y: number
-  readonly isMine: boolean
+  /** Mutable: a Magnetic Hook pull relocates the armed mine, flipping this on two cells. */
+  isMine: boolean
+  /** A Magnetic Hook bonus tile (never also a mine). Clearing it grants a hook charge. */
+  isHook: boolean
   tier: Tier
    /** Hidden true HP, rolled within the tier's band. Damage reduces `hp`. */
   hp: number
@@ -193,6 +196,7 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
         x,
         y,
         isMine,
+        isHook: false,
         tier,
         hp: 1,
         maxHp: 1,
@@ -202,6 +206,22 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
         numberKnown: false,
       }
     }
+  }
+
+  // Magnetic Hook bonus tiles: placed on non-mine ground in the OUTER rings only (never the
+  // centre region), so you earn pulls by clearing outward — you can't tap around the boss to
+  // farm them. Low density; visible while covered so you can route to them.
+  const outerMin = cfg.blastRadiusCap + 2 // keep hooks clear of the centre/boss region
+  const hookCandidates: number[] = []
+  for (const t of tiles) {
+    if (t.isMine || t.tier === 'boss') continue
+    if (t.x === opening.x && t.y === opening.y) continue
+    if (Math.max(Math.abs(t.x - boss.x), Math.abs(t.y - boss.y)) < outerMin) continue
+    hookCandidates.push(idx(width, t.x, t.y))
+  }
+  rng.shuffle(hookCandidates)
+  for (let i = 0; i < Math.min(cfg.hookCount, hookCandidates.length); i++) {
+    tiles[hookCandidates[i]!]!.isHook = true
   }
 
   // Pin the boss: the single multi-hit tile at centre — the end-game problem.

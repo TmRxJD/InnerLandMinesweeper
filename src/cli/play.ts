@@ -75,6 +75,7 @@ function render(snap: BoardSnapshot, cfg: (typeof DIFFICULTIES)[Difficulty], min
         return (isMine ? '✱' : ch.toUpperCase()) + '~' // damaged (uppercase + ~)
       }
       default: {
+        if (t.isHook) return 'H '
         const ch = TIER_CHAR[t.tier] ?? '?'
         return (isMine ? '✱' : ch) + ' '
       }
@@ -89,7 +90,7 @@ function render(snap: BoardSnapshot, cfg: (typeof DIFFICULTIES)[Difficulty], min
   }
   const hud =
     `Charge ${snap.playerCharge}/${cfg.maxPlayerCharge}  Time ${fmtTime(snap.timeElapsed)}  ` +
-    `Boss ${snap.bossHp}/${snap.bossMaxHp}  Moves ${snap.moves}  [${snap.status}]`
+    `Boss ${snap.bossHp}/${snap.bossMaxHp}  Hooks ${snap.hookCharges}  Moves ${snap.moves}  [${snap.status}]`
   return `${hud}\n${lines.join('\n')}`
 }
 
@@ -100,11 +101,12 @@ function mineSetFor(diff: Difficulty, seed: string): Set<string> {
 
 /** Apply one command string (e.g. "t4,3" or "d2,1") to the engine. Returns a note. */
 function applyCommand(engine: MinesweeperEngine, cmd: string): string {
-  const m = cmd.match(/^([td])\s*(\d+)\s*,\s*(\d+)$/i)
+  const m = cmd.match(/^([tdh])\s*(\d+)\s*,\s*(\d+)$/i)
   if (!m) return `? "${cmd}"`
   const [, kind, xs, ys] = m
   const coord = { x: Number(xs), y: Number(ys) }
-  const events = kind!.toLowerCase() === 't' ? engine.reveal(coord) : engine.detonate(coord)
+  const k = kind!.toLowerCase()
+  const events = k === 't' ? engine.reveal(coord) : k === 'd' ? engine.detonate(coord) : engine.useHook(coord)
   const kinds = events.map(e => e.kind)
   return `${cmd} → ${kinds.length ? kinds.join(',') : 'no-op'}`
 }

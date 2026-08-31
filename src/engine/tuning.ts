@@ -18,6 +18,8 @@ export interface DifficultyConfig {
   readonly height: number
   /** Number of hidden mines (your ammunition). Roughly 14% of the board. */
   readonly mineCount: number
+  /** Number of Magnetic Hook bonus tiles (outer rings only). */
+  readonly hookCount: number
   /** Cosmetic only: relative mix of enemy *sprites*. All non-boss tiles are 1 HP; the tier
    *  just picks which Tower enemy art shows, so the field has visual variety. */
   readonly tierWeights: Readonly<Record<Tier, number>>
@@ -67,13 +69,14 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 13,
     height: 13,
     mineCount: 24, // ~14% of 169
+    hookCount: 4,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
     bossHp: 12,
-    parSeconds: 160,
-    goldSeconds: 90,
-    silverSeconds: 125,
-    bronzeSeconds: 160,
+    parSeconds: 75,
+    goldSeconds: 48,
+    silverSeconds: 60,
+    bronzeSeconds: 75,
     startingCharge: 8,
     maxPlayerCharge: 12,
     chargeRegenPerSecond: 1.0,
@@ -87,13 +90,14 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 17,
     height: 17,
     mineCount: 40, // ~14% of 289
+    hookCount: 6,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
     bossHp: 16,
-    parSeconds: 270,
-    goldSeconds: 150,
-    silverSeconds: 215,
-    bronzeSeconds: 270,
+    parSeconds: 130,
+    goldSeconds: 80,
+    silverSeconds: 105,
+    bronzeSeconds: 130,
     startingCharge: 8,
     maxPlayerCharge: 12,
     chargeRegenPerSecond: 1.1,
@@ -107,13 +111,14 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 21,
     height: 21,
     mineCount: 62, // ~14% of 441
+    hookCount: 9,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
     bossHp: 24,
-    parSeconds: 400,
-    goldSeconds: 240,
-    silverSeconds: 320,
-    bronzeSeconds: 400,
+    parSeconds: 200,
+    goldSeconds: 120,
+    silverSeconds: 160,
+    bronzeSeconds: 200,
     startingCharge: 10,
     maxPlayerCharge: 14,
     chargeRegenPerSecond: 1.2,

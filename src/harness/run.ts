@@ -17,7 +17,7 @@ import type { Difficulty, GameResult } from '../engine/types'
 import { ALL_BOTS, type Bot } from './bots'
 
 /** Simulated wall-clock a player spends per action — the timer advances between moves. */
-const SECONDS_PER_MOVE = 1
+const SECONDS_PER_MOVE = 0.45
 /** Hard cap on actions so a stuck bot can't spin forever. */
 const MAX_ACTIONS = 8000
 

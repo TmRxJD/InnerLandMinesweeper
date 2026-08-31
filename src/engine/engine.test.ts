@@ -94,12 +94,21 @@ describe('clicking a mine arms it for free', () => {
 })
 
 describe('hidden state does not leak', () => {
-  it('a covered mine looks identical to covered ground in a snapshot', () => {
-    const engine = createEngine({ difficulty: DIFF, seed: 'leak-seed' })
-    for (const t of engine.snapshot().tiles) {
-      if (t.state === 'covered') {
-        expect(Object.keys(t).sort()).toEqual(['coord', 'state', 'tier'])
-      }
+  it('a covered mine looks identical to covered ground (hooks are the only visible extra)', () => {
+    const seed = 'leak-seed'
+    const board = truth(seed)
+    const engine = createEngine({ difficulty: DIFF, seed })
+    for (const v of engine.snapshot().tiles) {
+      if (v.state !== 'covered') continue
+      // Nothing hidden ever leaks: no HP/number/charge on a covered tile.
+      expect(v.number).toBeUndefined()
+      expect(v.mineCharge).toBeUndefined()
+      expect(v.crack).toBeUndefined()
+      const t = tileAt(board, v.coord.x, v.coord.y)!
+      // A covered mine is indistinguishable from ground: only coord/state/tier, never isHook.
+      if (t.isMine) expect(Object.keys(v).sort()).toEqual(['coord', 'state', 'tier'])
+      // The only allowed extra is isHook, and only on actual hook tiles (a visible bonus).
+      if (v.isHook) expect(t.isHook).toBe(true)
     }
   })
 })
@@ -186,6 +195,76 @@ describe('detonation', () => {
       return
     }
     throw new Error('no adjacent-mine seed found')
+  })
+})
+
+describe('magnetic hook', () => {
+  it('places hook tiles in the outer rings only, never near centre', () => {
+    const board = truth('hook-gen')
+    const hooks = board.tiles.filter(t => t.isHook)
+    expect(hooks.length).toBe(cfg.hookCount)
+    const bx = Math.floor(cfg.width / 2)
+    const by = Math.floor(cfg.height / 2)
+    for (const h of hooks) {
+      expect(h.isMine).toBe(false)
+      expect(Math.max(Math.abs(h.x - bx), Math.abs(h.y - by))).toBeGreaterThanOrEqual(cfg.blastRadiusCap + 2)
+    }
+  })
+
+  it('clearing a hook tile grants a charge; a covered hook is visible in the snapshot', () => {
+    const board = truth('hook-collect')
+    const hook = board.tiles.find(t => t.isHook)!
+    const engine = createEngine({ difficulty: DIFF, seed: 'hook-collect' })
+    const v = engine.snapshot().tiles.find(t => t.coord.x === hook.x && t.coord.y === hook.y)!
+    expect(v.isHook).toBe(true) // routable while covered
+    expect(engine.snapshot().hookCharges).toBe(0)
+    const events = engine.reveal({ x: hook.x, y: hook.y })
+    expect(events.some(e => e.kind === 'hookCharged')).toBe(true)
+    expect(engine.snapshot().hookCharges).toBe(1)
+  })
+
+  it('pulls an armed mine one tile toward the boss, crushing the enemy in the way', () => {
+    // Find a seed + mine that is diagonal-ish to the boss with a covered enemy on the step.
+    for (let i = 0; i < 400; i++) {
+      const seed = `hook-pull-${i}`
+      const board = truth(seed)
+      const bx = Math.floor(cfg.width / 2)
+      const by = Math.floor(cfg.height / 2)
+      const mine = board.tiles.find(m => {
+        if (!m.isMine) return false
+        const dx = Math.sign(bx - m.x)
+        const dy = Math.sign(by - m.y)
+        const stepX = Math.abs(bx - m.x) >= Math.abs(by - m.y)
+        const step = stepX ? { x: m.x + dx, y: m.y } : { x: m.x, y: m.y + dy }
+        const dest = tileAt(board, step.x, step.y)
+        return !!dest && !dest.isMine && dest.tier !== 'boss' && (step.x !== m.x || step.y !== m.y)
+      })
+      if (!mine) continue
+      const engine = createEngine({ difficulty: DIFF, seed })
+      // Grant a charge by clearing a hook tile.
+      const hook = board.tiles.find(t => t.isHook)!
+      engine.reveal({ x: hook.x, y: hook.y })
+      engine.reveal({ x: mine.x, y: mine.y }) // arm
+      const before = engine.snapshot().hookCharges
+      const events = engine.useHook({ x: mine.x, y: mine.y })
+      expect(events.some(e => e.kind === 'hookUsed')).toBe(true)
+      expect(engine.snapshot().hookCharges).toBe(before - 1)
+      // The old cell is no longer a mine; a mine sits one step closer to centre.
+      const oldV = engine.snapshot().tiles.find(t => t.coord.x === mine.x && t.coord.y === mine.y)!
+      expect(oldV.state).not.toBe('armed')
+      const moved = engine.snapshot().tiles.some(t => t.state === 'armed')
+      expect(moved).toBe(true)
+      return
+    }
+    throw new Error('no suitable hook-pull seed found')
+  })
+
+  it('does nothing without a charge, or on a non-armed target', () => {
+    const board = truth('hook-noop')
+    const mine = board.tiles.find(t => t.isMine)!
+    const engine = createEngine({ difficulty: DIFF, seed: 'hook-noop' })
+    engine.reveal({ x: mine.x, y: mine.y }) // armed, but no hook charge
+    expect(engine.useHook({ x: mine.x, y: mine.y })).toEqual([]) // no charge
   })
 })
 
