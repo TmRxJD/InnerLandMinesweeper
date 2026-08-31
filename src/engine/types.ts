@@ -176,10 +176,11 @@ export interface EngineOptions {
 export interface MinesweeperEngine {
   reveal(coord: Coord): EventList
   detonate(coord: Coord): EventList
-  /** Spend one Magnetic Hook charge to pull the armed mine at `coord` one tile toward the
-   *  Boss (into cleared ground). No-op (empty list) if there is no charge, no armed mine
-   *  there, or no valid inward cell. */
-  useHook(coord: Coord): EventList
+  /** Spend one Magnetic Hook charge to move the armed mine at `coord` one tile in `dir` (any of
+   *  the 8 directions; each of dir.x/dir.y is used as its sign, −1..1). It crushes a 1-HP enemy
+   *  in the way; no-op (empty list) with no charge, no armed mine there, a zero direction, or a
+   *  target that is another mine, the Boss, or off-grid. */
+  useHook(coord: Coord, dir: Coord): EventList
   /** Advance the timer; the harness calls this explicitly, the UI on a rAF/interval tick. */
   tick(deltaSeconds: number): EventList
   snapshot(): BoardSnapshot

@@ -95,8 +95,10 @@ export class GameApp {
   private elCoach!: HTMLElement
   /** Pending long-press timer id for touch-triggered hook pulls. */
   private hookHold: ReturnType<typeof setTimeout> | null = null
-  /** Set when a long-press already acted, so the trailing synthetic click is ignored. */
+  /** Set when a long-press/drag already acted, so the trailing synthetic click is ignored. */
   private suppressNextClick = false
+  /** The armed mine a pointer went down on — dragging it to a neighbour hooks it that way. */
+  private dragStart: { coord: Coord; armed: boolean } | null = null
   private helpDialog!: HTMLElement
 
   private width = 0
@@ -250,9 +252,10 @@ export class GameApp {
           <div class="ilm-help__row">
             <span class="ilm-help__icon" style="color:var(--energy)">⌇</span>
             <div><b>Magnetic Hook.</b> Some tiles hide a <b style="color:var(--energy)">Magnetic Hook</b> —
-              clear them and your <b>Hooks</b> count (in the HUD) ticks up. <b>Right-click</b> (or
-              <b>long-press</b>) an armed mine to spend one and pull it a tile toward the Boss, crushing
-              whatever's in the way — how you deliver a big stack the last step to the centre.</div>
+              clear them and your <b>Hooks</b> count (in the HUD) ticks up. <b>Drag</b> an armed mine one
+              tile to pull it that way (crushing whatever's there), or <b>right-click</b> / <b>long-press</b>
+              to pull it toward the Boss. Gather mines together to build a bigger blast, and deliver stacks
+              to the centre.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
@@ -291,6 +294,21 @@ export class GameApp {
       if (e.target === this.helpDialog) this.closeHelp() // backdrop click
     })
     this.board.addEventListener('keydown', e => this.onKey(e as KeyboardEvent))
+    // Complete a drag-to-hook: released on a neighbour of the armed mine we grabbed → pull it there.
+    this.board.addEventListener('pointerup', e => {
+      const start = this.dragStart
+      this.dragStart = null
+      if (!start || !start.armed) return
+      const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('.ilm-tile')
+      if (!el?.dataset.i) return
+      const end = this.coordOf(Number(el.dataset.i))
+      const dx = end.x - start.coord.x
+      const dy = end.y - start.coord.y
+      if ((dx || dy) && Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+        this.suppressNextClick = true // the drag acted; don't also detonate on the click
+        this.hookMine(start.coord, { x: dx, y: dy })
+      }
+    })
     document.addEventListener('keydown', this.onGlobalKey)
   }
 
@@ -385,18 +403,23 @@ export class GameApp {
       btn.setAttribute('role', 'gridcell')
       btn.tabIndex = i === 0 ? 0 : -1
       btn.addEventListener('click', () => this.onTileClick(t.coord))
-      // Right-click pulls a hook (desktop). Suppress the context menu regardless.
+      // Drag an armed mine to a neighbour = directional hook. Record where a drag begins.
+      btn.addEventListener('pointerdown', () => {
+        const v = this.tileView(t.coord)
+        this.dragStart = { coord: t.coord, armed: v?.state === 'armed' }
+      })
+      // Right-click quick-pulls a hook toward the Boss (drag for a chosen direction — see below).
       btn.addEventListener('contextmenu', e => {
         e.preventDefault()
-        this.onHookTrigger(t.coord)
+        this.hookMine(t.coord, this.towardBoss(t.coord))
       })
-      // Long-press pulls a hook (touch). Cancel on move/release/scroll.
+      // Long-press quick-pulls toward the Boss (touch). Cancel on move/release/scroll.
       btn.addEventListener('touchstart', () => {
         this.clearHookHold()
         this.hookHold = setTimeout(() => {
           this.hookHold = null
           this.suppressNextClick = true // the long-press already acted; don't also detonate
-          this.onHookTrigger(t.coord)
+          this.hookMine(t.coord, this.towardBoss(t.coord))
         }, 450)
       }, { passive: true })
       const cancel = (): void => this.clearHookHold()
@@ -507,15 +530,23 @@ export class GameApp {
     this.pulseTile(coord, 'charge-up')
   }
 
-  /** Right-click (desktop) or long-press (touch) an armed mine to spend a hook charge and pull
-   *  it one tile toward the boss. A no-op with no charge or on a non-armed tile. */
-  private onHookTrigger(coord: Coord): void {
+  /** Spend a hook charge to pull the armed mine at `coord` one tile in `dir`. A no-op with no
+   *  charge, on a non-armed tile, or a blocked target. Drag an armed mine to choose the direction;
+   *  a right-click / long-press with no direction defaults toward the Boss. */
+  private hookMine(coord: Coord, dir: Coord): void {
     if (this.demo) this.stopDemo()
     if (this.engine.snapshot().status !== 'playing' || this.paused) return
     if (this.engine.snapshot().hookCharges < 1) return
     const tile = this.tileView(coord)
     if (!tile || tile.state !== 'armed') return
-    this.apply(this.engine.useHook(coord))
+    this.apply(this.engine.useHook(coord, dir))
+  }
+
+  /** A one-step direction from `coord` toward the board centre (the Boss). */
+  private towardBoss(coord: Coord): Coord {
+    const bx = (this.width - 1) >> 1
+    const by = (this.height - 1) >> 1
+    return { x: Math.sign(bx - coord.x), y: Math.sign(by - coord.y) }
   }
 
   private render(snap: BoardSnapshot): void {
@@ -729,9 +760,9 @@ export class GameApp {
     )
   }
 
-  private performAction(action: { type: 'reveal' | 'detonate' | 'hook'; coord: Coord }): void {
+  private performAction(action: { type: 'reveal' | 'detonate' | 'hook'; coord: Coord; dir?: Coord }): void {
     if (action.type === 'detonate') this.apply(this.engine.detonate(action.coord))
-    else if (action.type === 'hook') this.apply(this.engine.useHook(action.coord))
+    else if (action.type === 'hook') this.apply(this.engine.useHook(action.coord, action.dir ?? { x: 0, y: 0 }))
     else this.apply(this.engine.reveal(action.coord))
   }
 

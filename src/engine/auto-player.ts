@@ -14,6 +14,8 @@ import type { BoardSnapshot, Coord, TileView } from './types'
 export interface AutoAction {
   readonly type: 'reveal' | 'detonate' | 'hook'
   readonly coord: Coord
+  /** For a 'hook' action: the one-step direction to pull the mine. */
+  readonly dir?: Coord
 }
 
 function actionable(snap: BoardSnapshot): TileView[] {
@@ -55,22 +57,19 @@ function bestBy(mines: TileView[], score: (m: TileView) => number): TileView | n
   return best
 }
 
-/** Would a hook pull on `mine` land on guaranteed-empty ground (so it can't be a wasted no-op)?
- *  Checks the dominant-axis inward step, then the other, for a cleared/detonated/cracked cell
- *  (all guaranteed non-mine). */
-function hookStepClear(mine: TileView, boss: Coord, snap: BoardSnapshot): boolean {
+/** The one-step direction to hook `mine` toward the Boss onto guaranteed-empty ground (so the
+ *  charge is never wasted), or null if no such step. Tries the dominant axis, then the other. */
+function hookDirToward(mine: TileView, boss: Coord, snap: BoardSnapshot): Coord | null {
   const sx = Math.sign(boss.x - mine.coord.x)
   const sy = Math.sign(boss.y - mine.coord.y)
   const xFirst = Math.abs(boss.x - mine.coord.x) >= Math.abs(boss.y - mine.coord.y)
-  const steps = xFirst
-    ? [{ x: mine.coord.x + sx, y: mine.coord.y }, { x: mine.coord.x, y: mine.coord.y + sy }]
-    : [{ x: mine.coord.x, y: mine.coord.y + sy }, { x: mine.coord.x + sx, y: mine.coord.y }]
-  for (const s of steps) {
-    if (s.x === mine.coord.x && s.y === mine.coord.y) continue
-    const t = snap.tiles[s.y * snap.width + s.x]
-    if (t && t.tier !== 'boss' && (t.state === 'cleared' || t.state === 'detonated' || t.state === 'cracked')) return true
+  const dirs = xFirst ? [{ x: sx, y: 0 }, { x: 0, y: sy }] : [{ x: 0, y: sy }, { x: sx, y: 0 }]
+  for (const d of dirs) {
+    if (!d.x && !d.y) continue
+    const t = snap.tiles[(mine.coord.y + d.y) * snap.width + (mine.coord.x + d.x)]
+    if (t && t.tier !== 'boss' && (t.state === 'cleared' || t.state === 'detonated' || t.state === 'cracked')) return d
   }
-  return false
+  return null
 }
 
 function hasRevealedNeighbour(t: TileView, snap: BoardSnapshot, w: number): boolean {
@@ -125,7 +124,8 @@ export function autoPlay(snap: BoardSnapshot): AutoAction | null {
 
     // Keystone is grown (or can't be pumped further): deliver it.
     if (reaches(keystone, boss, snap)) return { type: 'detonate', coord: keystone.coord }
-    if (snap.hookCharges > 0 && hookStepClear(keystone, boss, snap)) return { type: 'hook', coord: keystone.coord }
+    const dir = snap.hookCharges > 0 ? hookDirToward(keystone, boss, snap) : null
+    if (dir) return { type: 'hook', coord: keystone.coord, dir }
     // Out of range and no hook lane yet — fall through to clear a path toward the centre.
   }
 

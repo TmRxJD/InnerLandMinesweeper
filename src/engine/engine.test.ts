@@ -233,30 +233,28 @@ describe('magnetic hook', () => {
       const board = truth(seed)
       const bx = Math.floor(cfg.width / 2)
       const by = Math.floor(cfg.height / 2)
+      const dirOf = (m: { x: number; y: number }) => ({ x: Math.sign(bx - m.x), y: Math.sign(by - m.y) })
       const mine = board.tiles.find(m => {
         if (!m.isMine) return false
-        const dx = Math.sign(bx - m.x)
-        const dy = Math.sign(by - m.y)
-        const stepX = Math.abs(bx - m.x) >= Math.abs(by - m.y)
-        const step = stepX ? { x: m.x + dx, y: m.y } : { x: m.x, y: m.y + dy }
-        const dest = tileAt(board, step.x, step.y)
-        return !!dest && !dest.isMine && dest.tier !== 'boss' && (step.x !== m.x || step.y !== m.y)
+        const d = dirOf(m)
+        if (!d.x && !d.y) return false
+        const dest = tileAt(board, m.x + d.x, m.y + d.y)
+        return !!dest && !dest.isMine && dest.tier !== 'boss'
       })
       if (!mine) continue
+      const dir = dirOf(mine)
       const engine = createEngine({ difficulty: DIFF, seed })
       // Grant a charge by clearing a hook tile.
       const hook = board.tiles.find(t => t.isHook)!
       engine.reveal({ x: hook.x, y: hook.y })
       engine.reveal({ x: mine.x, y: mine.y }) // arm
       const before = engine.snapshot().hookCharges
-      const events = engine.useHook({ x: mine.x, y: mine.y })
+      const events = engine.useHook({ x: mine.x, y: mine.y }, dir)
       expect(events.some(e => e.kind === 'hookUsed')).toBe(true)
       expect(engine.snapshot().hookCharges).toBe(before - 1)
-      // The old cell is no longer a mine; a mine sits one step closer to centre.
-      const oldV = engine.snapshot().tiles.find(t => t.coord.x === mine.x && t.coord.y === mine.y)!
-      expect(oldV.state).not.toBe('armed')
-      const moved = engine.snapshot().tiles.some(t => t.state === 'armed')
-      expect(moved).toBe(true)
+      // The old cell is no longer a mine; a mine now sits at coord+dir.
+      expect(engine.snapshot().tiles.find(t => t.coord.x === mine.x && t.coord.y === mine.y)!.state).not.toBe('armed')
+      expect(engine.snapshot().tiles.find(t => t.coord.x === mine.x + dir.x && t.coord.y === mine.y + dir.y)!.state).toBe('armed')
       return
     }
     throw new Error('no suitable hook-pull seed found')
@@ -267,7 +265,7 @@ describe('magnetic hook', () => {
     const mine = board.tiles.find(t => t.isMine)!
     const engine = createEngine({ difficulty: DIFF, seed: 'hook-noop' })
     engine.reveal({ x: mine.x, y: mine.y }) // armed, but no hook charge
-    expect(engine.useHook({ x: mine.x, y: mine.y })).toEqual([]) // no charge
+    expect(engine.useHook({ x: mine.x, y: mine.y }, { x: 1, y: 0 })).toEqual([]) // no charge
   })
 })
 

@@ -237,34 +237,20 @@ class Engine implements MinesweeperEngine {
     events.push({ kind: 'hookCharged', coord: { x: tile.x, y: tile.y }, to: this.hookCharges })
   }
 
-  /** Spend a hook charge to pull the armed mine at `coord` one tile toward the Boss. It moves
-   *  one orthogonal step that strictly reduces its distance to centre, into already-cleared
-   *  ground (never through an enemy, onto another mine, onto the Boss, or off-grid). Adjacent
-   *  numbers are kept honest at both the old and new cell. */
-  useHook(coord: Coord): EventList {
+  /** Spend a hook charge to move the armed mine at `coord` one tile in direction `dir` (any of
+   *  the 8 directions; dir.x/dir.y taken as signs). It crushes a 1-HP enemy in the way; never
+   *  onto another mine, the Boss, or off-grid. Adjacent numbers stay honest at both cells. */
+  useHook(coord: Coord, dir: Coord): EventList {
     if (this.status !== 'playing' || this.hookCharges < 1) return []
     const mine = tileAt(this.board, coord.x, coord.y)
     if (!mine || !mine.isMine || mine.state !== 'armed') return []
-
-    const bx = Math.floor(this.board.width / 2)
-    const by = Math.floor(this.board.height / 2)
-    // Candidate steps toward the boss, dominant axis first.
-    const steps: Coord[] = []
-    const sx = Math.sign(bx - mine.x)
-    const sy = Math.sign(by - mine.y)
-    if (Math.abs(bx - mine.x) >= Math.abs(by - mine.y)) {
-      if (sx) steps.push({ x: mine.x + sx, y: mine.y })
-      if (sy) steps.push({ x: mine.x, y: mine.y + sy })
-    } else {
-      if (sy) steps.push({ x: mine.x, y: mine.y + sy })
-      if (sx) steps.push({ x: mine.x + sx, y: mine.y })
-    }
-    // A valid inward cell is anything that isn't another mine or the Boss: empty ground, or a
-    // covered/cracked enemy — which the pull CRUSHES (a free clear) as the mine slides in.
-    const dest = steps
-      .map(s => tileAt(this.board, s.x, s.y))
-      .find(t => !!t && t.tier !== 'boss' && (t.state === 'cleared' || t.state === 'detonated' || ((t.state === 'covered' || t.state === 'cracked') && !t.isMine)))
-    if (!dest) return [] // no valid inward cell — nothing to do
+    const dx = Math.sign(dir.x)
+    const dy = Math.sign(dir.y)
+    if (dx === 0 && dy === 0) return [] // no direction
+    const dest = tileAt(this.board, mine.x + dx, mine.y + dy)
+    // Valid target: on-grid, not the Boss, and not a LIVE mine. A detonated crater keeps isMine
+    // set but is empty ground, so it's a fine landing spot; only armed/covered mines are blocked.
+    if (!dest || dest.tier === 'boss' || (dest.isMine && dest.state !== 'detonated')) return []
 
     const events: GameEvent[] = []
     this.hookCharges -= 1

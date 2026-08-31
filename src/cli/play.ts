@@ -99,14 +99,25 @@ function mineSetFor(diff: Difficulty, seed: string): Set<string> {
   return new Set(b.tiles.filter(t => t.isMine).map(t => `${t.x},${t.y}`))
 }
 
-/** Apply one command string (e.g. "t4,3" or "d2,1") to the engine. Returns a note. */
+/** Apply one command string. `t x,y` tap · `d x,y` detonate · `h x,y[ dx dy]` hook (dir defaults
+ *  toward the Boss; e.g. `h 4,3 1 0` hooks east). */
 function applyCommand(engine: MinesweeperEngine, cmd: string): string {
-  const m = cmd.match(/^([tdh])\s*(\d+)\s*,\s*(\d+)$/i)
+  const m = cmd.match(/^([tdh])\s*(\d+)\s*,\s*(\d+)(?:\s+(-?\d+)\s+(-?\d+))?$/i)
   if (!m) return `? "${cmd}"`
-  const [, kind, xs, ys] = m
+  const [, kind, xs, ys, dxs, dys] = m
   const coord = { x: Number(xs), y: Number(ys) }
   const k = kind!.toLowerCase()
-  const events = k === 't' ? engine.reveal(coord) : k === 'd' ? engine.detonate(coord) : engine.useHook(coord)
+  let events
+  if (k === 't') events = engine.reveal(coord)
+  else if (k === 'd') events = engine.detonate(coord)
+  else {
+    const s = engine.snapshot()
+    const dir =
+      dxs !== undefined
+        ? { x: Number(dxs), y: Number(dys) }
+        : { x: Math.sign(((s.width - 1) >> 1) - coord.x), y: Math.sign(((s.height - 1) >> 1) - coord.y) }
+    events = engine.useHook(coord, dir)
+  }
   const kinds = events.map(e => e.kind)
   return `${cmd} → ${kinds.length ? kinds.join(',') : 'no-op'}`
 }
@@ -124,7 +135,7 @@ function runAuto(diff: Difficulty, seed: string, spm: number): ReturnType<Minesw
     const action = autoPlay(snap)
     if (action) {
       if (action.type === 'reveal') engine.reveal(action.coord)
-      else if (action.type === 'hook') engine.useHook(action.coord)
+      else if (action.type === 'hook') engine.useHook(action.coord, action.dir ?? { x: 0, y: 0 })
       else engine.detonate(action.coord)
     }
     t += spm

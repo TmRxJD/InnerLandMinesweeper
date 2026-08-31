@@ -51,7 +51,7 @@ export function runGame(difficulty: Difficulty, seed: string, bot: Bot): RunOutc
     const action = bot.step(snap)
     if (action) {
       if (action.type === 'reveal') engine.reveal(action.coord)
-      else if (action.type === 'hook') engine.useHook(action.coord)
+      else if (action.type === 'hook') engine.useHook(action.coord, action.dir ?? { x: 0, y: 0 })
       else engine.detonate(action.coord)
     }
     engine.tick(SECONDS_PER_MOVE)
