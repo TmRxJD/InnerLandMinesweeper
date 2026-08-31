@@ -197,8 +197,8 @@ export class GameApp {
         <div class="ilm-controls">
           <select class="ilm-select" data-difficulty aria-label="Difficulty">${opts}</select>
           <button class="ilm-btn" data-hints aria-pressed="false">Hints</button>
-          <button class="ilm-btn" data-demo>Watch demo</button>
-          <button class="ilm-btn" data-new>New board</button>
+          <button class="ilm-btn" data-demo>Autoplay</button>
+          <button class="ilm-btn" data-new>Restart</button>
         </div>
       </div>
 
@@ -279,7 +279,7 @@ export class GameApp {
     const sel = this.root.querySelector<HTMLSelectElement>('[data-difficulty]')!
     sel.value = this.difficulty
     sel.addEventListener('change', () => { this.stopDemo(); this.newGame(sel.value as Difficulty, randomSeed()) })
-    this.root.querySelector('[data-new]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
+    this.root.querySelector('[data-new]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) }) // Restart → a fresh board
     this.root.querySelector('[data-again]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
     this.root.querySelector('[data-demo]')!.addEventListener('click', () => this.toggleDemo())
     this.root.querySelector('[data-hints]')!.addEventListener('click', () => this.toggleHints())
@@ -660,7 +660,7 @@ export class GameApp {
     this.demo = true
     this.demoStuck = 0
     this.root.classList.add('is-demo')
-    this.root.querySelector('[data-demo]')!.textContent = 'Stop demo'
+    this.root.querySelector('[data-demo]')!.textContent = 'Stop'
     if (this.engine.snapshot().status !== 'playing') this.newGame(this.difficulty, randomSeed())
     this.demoStep()
   }
@@ -670,7 +670,7 @@ export class GameApp {
     this.demo = false
     this.root.classList.remove('is-demo')
     this.cursor.classList.remove('is-click')
-    this.root.querySelector('[data-demo]')!.textContent = 'Watch demo'
+    this.root.querySelector('[data-demo]')!.textContent = 'Autoplay'
     for (const id of this.demoTimers) clearTimeout(id)
     this.demoTimers = []
   }

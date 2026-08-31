@@ -172,6 +172,8 @@ class Engine implements MinesweeperEngine {
       bossHp: this.bossHp(),
       bossMaxHp: this.cfg.bossHp,
       hookCharges: this.hookCharges,
+      stackCap: this.cfg.stackCap,
+      blastRadiusCap: this.cfg.blastRadiusCap,
     }
   }
 

@@ -154,10 +154,10 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
     }
   }
 
-  // A tight ring of cells right around the Boss (within Chebyshev 2). Mines here can hit the
-  // Boss even at low stack (radius 1 reaches distance 1), and being clustered they overlap-
-  // charge each other as you detonate them in sequence — so the ring is always enough to kill
-  // the blast-only Boss without needing perfect charged-mine delivery.
+  // A ring of mines within blast reach of the Boss, clustered enough that a detonation sequence
+  // self-charges them to beat the Boss HP. (Known-working baseline. NOTE: the desired *minimal,
+  // no-touching, hook-to-deliver* distribution needs a hook-gathering solver bot to verify — see
+  // docs/GAME_DESIGN.md "Open questions"; until that exists this cluster keeps boards solvable.)
   const ring = 2
   const centreCells: number[] = []
   for (let dy = -ring; dy <= ring; dy++) {
@@ -168,8 +168,6 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
       if (nx >= 0 && ny >= 0 && nx < width && ny < height && !reserved.has(i)) centreCells.push(i)
     }
   }
-  // Guarantee enough near-Boss mines that a straightforward detonation sequence (which
-  // self-charges the cluster) beats the Boss HP, with headroom.
   const minCentreMines = Math.min(centreCells.length, Math.ceil(cfg.bossHp / 2) + 9)
 
   const mineCells = new Set<number>()

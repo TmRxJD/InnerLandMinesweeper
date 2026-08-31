@@ -1,16 +1,11 @@
 /**
- * A reference auto-player: a reasonable, non-deducing strategy used by BOTH the balance
- * harness and the in-game watch-demo, so the demo you watch is the same player the harness
- * validates.
- *
- * The model rewards *blasts over taps*: detonating a mine clears its whole square for free and
- * chain-arms the mines it catches, while a hand-tap clears one tile for one charge. So the bot:
- *  - detonates armed mines whenever a blast would clear ground or hit the Boss (this cascades),
- *  - otherwise taps the frontier to open new ground and uncover more mines (free when the tile
- *    is a mine, 1 charge when it's an enemy),
- *  - falls back to detonating anything / waiting for regen when broke.
- * Emergent effect: it clears outward→inward, pumping inner mines via overlap and spending them
- * on the Boss.
+ * A reference auto-player used by BOTH the balance harness and the in-game Autoplay, so the run
+ * you watch is the same player the harness validates. It is meant to *demonstrate strategy*, not
+ * just cascade: it clears the field outward, then runs a deliberate **Boss campaign** — it grooms
+ * a "keystone" mine near the centre, pumps its stack via overlapping detonations, and only then
+ * delivers that big stack to the Boss (walking it in with a Magnetic Hook if it's out of range).
+ * The Boss is blast-only and no longer surrounded by a dense ring, so this build-and-deliver loop
+ * is the actual way it dies — the bot can't cheese it.
  */
 
 import { blastRadiusForStack } from './tuning'
@@ -21,8 +16,6 @@ export interface AutoAction {
   readonly coord: Coord
 }
 
-const RADIUS_CAP = 3 // matches tuning.blastRadiusCap; the bot's targeting heuristic
-
 function actionable(snap: BoardSnapshot): TileView[] {
   return snap.tiles.filter(t => t.state === 'covered' || t.state === 'cracked')
 }
@@ -32,32 +25,34 @@ function armedMines(snap: BoardSnapshot): TileView[] {
 function cheb(a: Coord, b: Coord): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))
 }
+function bossCoord(snap: BoardSnapshot): Coord {
+  return { x: (snap.width - 1) / 2 | 0, y: (snap.height - 1) / 2 | 0 }
+}
+function reaches(mine: TileView, boss: Coord, snap: BoardSnapshot): boolean {
+  return blastRadiusForStack(mine.mineCharge ?? 1, snap.blastRadiusCap) >= cheb(mine.coord, boss)
+}
 
-/** Value of detonating `mine`: covered ground its (stack-sized) blast would clear, plus a big
- *  bonus for hitting the still-alive Boss, plus other armed mines it would pump. */
-function blastValue(mine: TileView, snap: BoardSnapshot): number {
-  const radius = blastRadiusForStack(mine.mineCharge ?? 1, RADIUS_CAP)
+/** How much covered ground a detonation would clear (its own value as a board-clearer). */
+function clearValue(mine: TileView, snap: BoardSnapshot): number {
+  const radius = blastRadiusForStack(mine.mineCharge ?? 1, snap.blastRadiusCap)
   let value = 0
   for (const t of snap.tiles) {
     if (t.coord.x === mine.coord.x && t.coord.y === mine.coord.y) continue
     if (cheb(mine.coord, t.coord) > radius) continue
-    if (t.state === 'covered' || t.state === 'cracked') value += t.tier === 'boss' ? 20 : 1
-    else if (t.state === 'armed') value += 2 // overlap-charges it / chains
+    if ((t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss') value += 1
+    else if (t.state === 'armed') value += 1 // overlap-charges it / chains
   }
-  return value + (mine.mineCharge ?? 1) * 0.1
+  return value
 }
 
-function bestMine(mines: TileView[], snap: BoardSnapshot): { mine: TileView; value: number } {
-  let best = mines[0]!
-  let bestVal = blastValue(best, snap)
+function bestBy(mines: TileView[], score: (m: TileView) => number): TileView | null {
+  let best: TileView | null = null
+  let bestVal = -Infinity
   for (const m of mines) {
-    const v = blastValue(m, snap)
-    if (v > bestVal) {
-      best = m
-      bestVal = v
-    }
+    const v = score(m)
+    if (v > bestVal) { best = m; bestVal = v }
   }
-  return { mine: best, value: bestVal }
+  return best
 }
 
 /** Would a hook pull on `mine` land on guaranteed-empty ground (so it can't be a wasted no-op)?
@@ -89,58 +84,64 @@ function hasRevealedNeighbour(t: TileView, snap: BoardSnapshot, w: number): bool
   return false
 }
 
+/** The mine we're grooming for the Boss: the armed mine nearest the centre, then biggest stack. */
+function keystoneMine(mines: TileView[], boss: Coord): TileView | null {
+  if (mines.length === 0) return null
+  return [...mines].sort(
+    (a, b) => cheb(a.coord, boss) - cheb(b.coord, boss) || (b.mineCharge ?? 1) - (a.mineCharge ?? 1),
+  )[0]!
+}
+
 /** One move for the given board, or null if there is nothing useful to do right now. */
 export function autoPlay(snap: BoardSnapshot): AutoAction | null {
   if (snap.status !== 'playing') return null
   const mines = armedMines(snap)
   const cov = actionable(snap)
+  const boss = bossCoord(snap)
+  const bossAlive = snap.bossHp > 0
+
   if (cov.length === 0) {
-    // Only armed mines remain — detonate them (they're uncovered, but spend them anyway).
-    if (mines.length > 0) return { type: 'detonate', coord: bestMine(mines, snap).mine.coord }
-    return null
+    // Field cleared — only the Boss (and maybe mines) remain. Spend mines on it, biggest first.
+    const best = bestBy(mines, m => (reaches(m, boss, snap) ? 100 : 0) + (m.mineCharge ?? 1))
+    return best ? { type: 'detonate', coord: best.coord } : null
   }
 
-  // 1. Detonate / hook.
-  if (mines.length > 0) {
-    const boss = { x: (snap.width - 1) / 2 | 0, y: (snap.height - 1) / 2 | 0 }
-    const reaches = (m: TileView) => blastRadiusForStack(m.mineCharge ?? 1, RADIUS_CAP) >= cheb(m.coord, boss)
+  // === Boss campaign: build a keystone stack near the centre, then deliver it. ===
+  const keystone = keystoneMine(mines, boss)
+  // Only run the campaign once a mine is near enough that it (or a hook or two) can reach the Boss.
+  if (bossAlive && keystone && cheb(keystone.coord, boss) <= snap.blastRadiusCap + 3) {
+    const ks = keystone.mineCharge ?? 1
+    const wantStack = Math.min(snap.stackCap, 5) // groom a meaty stack before spending it
 
-    // Hook delivery: if we hold a charge and the Boss lives, walk our best out-of-range stack
-    // one tile inward along cleared ground — this is how a charged mine reaches the centre.
-    if (snap.bossHp > 0 && snap.hookCharges > 0) {
-      const deliverable = mines
-        .filter(m => (m.mineCharge ?? 1) >= 3 && !reaches(m) && cheb(m.coord, boss) > 1 && hookStepClear(m, boss, snap))
-        .sort((a, b) => (b.mineCharge ?? 1) - (a.mineCharge ?? 1) || cheb(a.coord, boss) - cheb(b.coord, boss))
-      if (deliverable[0]) return { type: 'hook', coord: deliverable[0].coord }
+    // Pump the keystone: detonate an armed mine whose blast overlaps it (that's +1 to its stack).
+    if (ks < wantStack) {
+      const pumpers = mines.filter(
+        m => m !== keystone && cheb(m.coord, keystone.coord) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap),
+      )
+      // Prefer a pumper that also clears the most ground and isn't itself a Boss-ready delivery.
+      const p = bestBy(pumpers, m => clearValue(m, snap) + (reaches(m, boss, snap) ? -5 : 0))
+      if (p) return { type: 'detonate', coord: p.coord }
     }
 
-    const usable = mines.filter(m => blastValue(m, snap) > 0)
-    if (snap.bossHp > 0 && usable.some(reaches)) {
-      // Boss endgame: don't dribble low-stack hits at the Boss. If a mine can kill it, fire.
-      const deliveries = usable.filter(reaches).sort((a, b) => (b.mineCharge ?? 1) - (a.mineCharge ?? 1))
-      if ((deliveries[0]!.mineCharge ?? 1) >= snap.bossHp) return { type: 'detonate', coord: deliveries[0]!.coord }
-      // Otherwise pump the cluster first: detonate the armed mine overlapping the MOST other
-      // armed mines (charging them), so a big delivery builds up before it's spent.
-      const chargeValue = (m: TileView) => mines.filter(o => o !== m && cheb(o.coord, m.coord) <= blastRadiusForStack(m.mineCharge ?? 1, RADIUS_CAP)).length
-      const pump = [...usable].sort((a, b) => chargeValue(b) - chargeValue(a))[0]!
-      if (chargeValue(pump) > 0 && !reaches(pump)) return { type: 'detonate', coord: pump.coord }
-      // No charger left that spares a delivery — spend the biggest delivery (chip the Boss).
-      return { type: 'detonate', coord: deliveries[0]!.coord }
-    }
-    // Normal: detonate for free area-clearing whenever a blast does something.
-    const { mine, value } = bestMine(mines, snap)
-    if (value > 0) return { type: 'detonate', coord: mine.coord }
+    // Keystone is grown (or can't be pumped further): deliver it.
+    if (reaches(keystone, boss, snap)) return { type: 'detonate', coord: keystone.coord }
+    if (snap.hookCharges > 0 && hookStepClear(keystone, boss, snap)) return { type: 'hook', coord: keystone.coord }
+    // Out of range and no hook lane yet — fall through to clear a path toward the centre.
   }
 
-  // 2. Open new ground / uncover mines. The Boss is tap-immune, so never target it (that would
-  //    spin uselessly). Prefer a covered tile on the cleared frontier; fall back to any tappable.
+  // === Clear the field. Detonate a mine that opens ground; while the Boss lives, spare the keystone. ===
+  const clearers = mines.filter(m => m !== (bossAlive ? keystone : null) && clearValue(m, snap) > 0)
+  const c = bestBy(clearers, m => clearValue(m, snap))
+  if (c) return { type: 'detonate', coord: c.coord }
+
+  // Open new ground / uncover mines. Never tap the Boss (it's immune → would spin).
   const tappable = cov.filter(t => t.tier !== 'boss')
   if (tappable.length > 0 && snap.playerCharge >= 1) {
     const frontier = tappable.find(t => hasRevealedNeighbour(t, snap, snap.width)) ?? tappable[0]!
     return { type: 'reveal', coord: frontier.coord }
   }
 
-  // 3. Broke: detonate any armed mine to refuel and clear; else wait for regen.
-  if (mines.length > 0) return { type: 'detonate', coord: bestMine(mines, snap).mine.coord }
-  return null
+  // Broke / nothing else: spend any mine (refuel + clear, or chip the Boss); else wait for regen.
+  const any = bestBy(mines, m => clearValue(m, snap) + (m.mineCharge ?? 1) * 0.1)
+  return any ? { type: 'detonate', coord: any.coord } : null
 }

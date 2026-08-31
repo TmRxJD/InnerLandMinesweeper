@@ -89,6 +89,9 @@ export interface BoardSnapshot {
   readonly bossMaxHp: number
   /** Held Magnetic Hook charges — spend one to pull an armed mine a tile toward the Boss. */
   readonly hookCharges: number
+  /** Caps for this difficulty, so a strategy layer (bot / UI) can reason about stacks & reach. */
+  readonly stackCap: number
+  readonly blastRadiusCap: number
 }
 
 // There is no 'lost' — the board is always completable and the clock is only the score.
