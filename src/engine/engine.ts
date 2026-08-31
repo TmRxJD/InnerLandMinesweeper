@@ -98,11 +98,10 @@ class Engine implements MinesweeperEngine {
     const gained = Math.round(tile.mineCharge * this.cfg.chargeConversion)
     if (gained !== 0) this.setPlayerCharge(this.playerCharge + gained, events)
 
-    // 2. The mine leaves the board. A blast removes a FRACTION of each tile's max HP, so its
-    //    bite scales with the target: it never one-shots a full-HP tough tile the way flat
-    //    damage did. The core ring takes the full fraction; it falls off with distance
-    //    (blastFalloff), and the mine's charge multiplies it (a charged mine clears outright).
-    const peakFraction = this.cfg.blastPct * tile.mineCharge
+    // 2. The mine leaves the board. Blast damage per tile is a FRACTION of its max HP
+    //    (so small tiles clear), but the absolute removal is CAPPED (so a fraction of a huge
+    //    HP pool can't gut a Fleet — a 1× blast barely dents one). Charge multiplies the
+    //    result and distance attenuates it; see the loop below.
     const radiusTiles = withinRadius(this.board, tile.x, tile.y, this.cfg.blastRadius)
     tile.state = 'detonated'
     events.push({
@@ -115,40 +114,35 @@ class Engine implements MinesweeperEngine {
     // 3. Removing the mine decrements neighbours' live counts so numbers stay accurate.
     this.decrementAround(tile, events)
 
-    // 4. Apply blast damage. Track which ground cells this blast *cleared* — overlap
-    //    charging keys off cleared ground, not merely damaged ground.
-    const clearedByBlast: Tile[] = []
+    // 4. Apply blast damage.
     for (const t of radiusTiles) {
       if (t.isMine) {
+        // A mine caught in the blast reacts: a hidden one arms, an already-armed one gains
+        // charge (the Chrono-Jump overlap). Keyed on being INSIDE the blast, so mines next to
+        // each other reliably pump each other — it does not depend on the blast clearing ground.
         if (t.state === 'covered') this.armMine(t, 'blast', events)
+        else if (t.state === 'armed') this.chargeMine(t, events)
         continue
       }
       if (t.state === 'cleared') continue
-      // Percentage falloff: the core ring loses `peakFraction` of its MAX HP; each ring
-      // further out is multiplied by blastFalloff again. Because it's a fraction of max HP,
-      // a tough tile loses more absolute HP but survives the same number of blasts as a weak
-      // one — HP scales cleanly and no single blast flattens a full-HP tile.
+      // Per-tier blast bite: each class loses a set fraction of its MAX HP per point of charge
+      // at the core (Common clears, Advanced ~80%, Elite ~50%, Fleet ~30%, Boss a sliver), so
+      // the number of blasts to clear a tile is a property of its CLASS, not its (hidden) HP.
+      // Charge multiplies it; distance attenuates it.
+      const base = t.maxHp * this.cfg.blastPctByTier[t.tier]
       const dist = Math.max(Math.abs(t.x - tile.x), Math.abs(t.y - tile.y))
-      const frac = peakFraction * Math.pow(this.cfg.blastFalloff, Math.max(0, dist - 1))
-      // The Boss resists the percentage wipe — otherwise a fraction of its huge HP is still a
-      // huge number and one blast nearly kills it. Resisted, it's a hand-chip duel.
-      const resist = t.tier === 'boss' ? this.cfg.bossBlastResist : 1
-      const dmg = Math.max(0, Math.round(t.maxHp * frac * resist))
+      const falloff = Math.pow(this.cfg.blastFalloff, Math.max(0, dist - 1))
+      const dmg = Math.max(0, Math.round(base * tile.mineCharge * falloff))
       t.hp -= dmg
       if (t.hp <= 0) {
         // Vaporised by the blast: cleared, but its number is never revealed. Information
         // stays tied to risky manual taps.
         this.destroyGroundTile(t, events)
-        clearedByBlast.push(t)
         chainCleared += 1
       } else {
         this.damageTile(t, events)
       }
     }
-
-    // 5. Overlap charging: every other armed mine whose radius covers ground this blast
-    //    cleared gains charge.
-    if (clearedByBlast.length > 0) this.chargeOverlappingMines(tile, clearedByBlast, events)
 
     if (chainCleared > this.maxChain) this.maxChain = chainCleared
 
@@ -265,19 +259,13 @@ class Engine implements MinesweeperEngine {
     }
   }
 
-  private chargeOverlappingMines(source: Tile, clearedGround: Tile[], events: GameEvent[]): void {
-    const clearedSet = new Set(clearedGround)
-    for (const other of this.board.tiles) {
-      if (other === source) continue
-      if (other.state !== 'armed') continue
-      if (other.mineCharge >= this.cfg.maxMineCharge) continue // already at the cap
-      const covers = withinRadius(this.board, other.x, other.y, this.cfg.blastRadius)
-      if (covers.some(c => clearedSet.has(c))) {
-        const from = other.mineCharge
-        other.mineCharge = Math.min(this.cfg.maxMineCharge, other.mineCharge + this.cfg.chargeGainPerOverlap)
-        events.push({ kind: 'mineChargeChanged', coord: { x: other.x, y: other.y }, from, to: other.mineCharge })
-      }
-    }
+  /** A mine caught inside another mine's blast gains charge (capped) — the Chrono-Jump
+   *  overlap. Called for every already-armed mine within the blast radius. */
+  private chargeMine(mine: Tile, events: GameEvent[]): void {
+    if (mine.mineCharge >= this.cfg.maxMineCharge) return // already at the cap
+    const from = mine.mineCharge
+    mine.mineCharge = Math.min(this.cfg.maxMineCharge, mine.mineCharge + this.cfg.chargeGainPerOverlap)
+    events.push({ kind: 'mineChargeChanged', coord: { x: mine.x, y: mine.y }, from, to: mine.mineCharge })
   }
 
   // -- resources & end state ----------------------------------------------

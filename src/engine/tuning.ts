@@ -36,21 +36,16 @@ export interface DifficultyConfig {
   readonly startingCharge: number
   /** Hard ceiling on the player's charge pool — detonations can't inflate it past this. */
   readonly maxPlayerCharge: number
-  /** Fraction of a tile's MAX HP a blast removes at the core ring, per point of mine charge.
-   *  e.g. 0.5 with a charge-1 mine strips 50% of max HP at distance 1; a charge-2 mine clears
-   *  outright. Because it scales with the tile's own HP, a blast never one-shots a full-HP
-   *  tough tile — it takes the same number of blasts as a weak one. Falls off with distance
-   *  (blastFalloff). */
-  readonly blastPct: number
-  /** Multiplier on blast damage to the Boss only (0..1). A percentage-of-max blast otherwise
-   *  trivialises the Boss — a fraction of its 60-90 HP is still a large flat number — so it
-   *  resists blasts and must largely be worn down by hand. */
-  readonly bossBlastResist: number
+  /** Fraction of a tile's MAX HP a blast removes at the core, per point of mine charge, keyed
+   *  by CLASS: Common 1.0 (clears), Advanced ~0.8, Elite ~0.5, Fleet ~0.3, Boss a sliver. This
+   *  makes "blasts to clear" a property of the class, independent of its hidden HP — so HP can
+   *  be cranked for a wide hand-clear / charge-cost spread without changing blast counts.
+   *  Charge multiplies it; distance attenuates it (blastFalloff). */
+  readonly blastPctByTier: Readonly<Record<Tier, number>>
   /** Per-ring multiplier as a blast travels outward from the mine. The adjacent ring
-   *  (distance 1) takes the full `blastPct × charge` fraction; distance 2 takes that ×
-   *  blastFalloff, distance 3 × blastFalloff², and so on. < 1 makes a blast an explosion
-   *  (strong core, weak edge) instead of a uniform slab, so tile HP decides what survives
-   *  at range. */
+   *  (distance 1) takes the full per-tier bite; distance 2 takes that × blastFalloff,
+   *  distance 3 × blastFalloff², and so on. < 1 makes a blast an explosion (strong core,
+   *  weaker edge) rather than a uniform slab. */
   readonly blastFalloff: number
   /** Chebyshev radius of a detonation. Blasts vaporise without revealing numbers, so a
    *  wider radius clears more ground without leaking information — it is the main engine
@@ -75,10 +70,21 @@ export interface DifficultyConfig {
  */
 const SHARED_BANDS: Record<Tier, TierBand> = {
   common: { minHp: 2, maxHp: 4 },
-  advanced: { minHp: 5, maxHp: 9 },
-  elite: { minHp: 10, maxHp: 16 },
-  fleet: { minHp: 18, maxHp: 28 },
-  boss: { minHp: 60, maxHp: 90 },
+  advanced: { minHp: 8, maxHp: 14 },
+  elite: { minHp: 16, maxHp: 26 },
+  fleet: { minHp: 30, maxHp: 46 },
+  boss: { minHp: 60, maxHp: 90 }, // overridden per difficulty (see bandsWithBoss)
+}
+
+/** Blast bite per class: fraction of MAX HP a charge-1 core blast removes. Common clears in one;
+ *  Advanced ~2 blasts, Elite ~2, Fleet ~4, Boss a long grind. Because it's a fraction of max HP,
+ *  the blast-count is fixed per class no matter how high HP is cranked. */
+const BLAST_PCT: Record<Tier, number> = {
+  common: 1.0,
+  advanced: 0.8,
+  elite: 0.5,
+  fleet: 0.3,
+  boss: 0.18,
 }
 
 /** The ordinary classes share one HP ramp across difficulties; only the Boss scales, so its
@@ -94,17 +100,16 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   gentle: {
     width: 9,
     height: 9,
-    mineCount: 16,
+    mineCount: 14,
     handTapDamage: 6,
     tierWeights: { common: 13, advanced: 4, elite: 1.6, fleet: 0.5, boss: 0 },
     hardGroundGradient: 0.16,
-    maxMineCharge: 6,
-    bands: bandsWithBoss(40, 55),
+    maxMineCharge: 5,
+    bands: bandsWithBoss(70, 100),
     timerSeconds: 300,
     startingCharge: 9,
     maxPlayerCharge: 10,
-    blastPct: 0.9,
-    bossBlastResist: 0.15,
+    blastPctByTier: BLAST_PCT,
     blastRadius: 2,
     blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
@@ -115,43 +120,41 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   standard: {
     width: 11,
     height: 11,
-    mineCount: 12,
+    mineCount: 18,
     handTapDamage: 6,
     tierWeights: { common: 11, advanced: 4.5, elite: 2.2, fleet: 0.9, boss: 0 },
     hardGroundGradient: 0.2,
-    maxMineCharge: 6,
-    bands: bandsWithBoss(60, 85),
+    maxMineCharge: 5,
+    bands: bandsWithBoss(100, 150),
     timerSeconds: 420,
     startingCharge: 9,
     maxPlayerCharge: 10,
-    blastPct: 0.9,
-    bossBlastResist: 0.15,
-    blastRadius: 2,
-    blastFalloff: 0.4,
-    chargeGainPerOverlap: 1,
-    chargeConversion: 3,
-    chargeRegenPerSecond: 1.3,
-    scoreDifficultyMultiplier: 1.6,
-  },
-  hard: {
-    width: 15,
-    height: 15,
-    mineCount: 11,
-    handTapDamage: 6,
-    tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
-    hardGroundGradient: 0.26,
-    maxMineCharge: 7,
-    bands: bandsWithBoss(90, 120),
-    timerSeconds: 1000,
-    startingCharge: 12,
-    maxPlayerCharge: 14,
-    blastPct: 0.9,
-    bossBlastResist: 0.15,
+    blastPctByTier: BLAST_PCT,
     blastRadius: 2,
     blastFalloff: 0.4,
     chargeGainPerOverlap: 1,
     chargeConversion: 3,
     chargeRegenPerSecond: 1.5,
+    scoreDifficultyMultiplier: 1.6,
+  },
+  hard: {
+    width: 15,
+    height: 15,
+    mineCount: 28,
+    handTapDamage: 6,
+    tierWeights: { common: 9, advanced: 4.5, elite: 2.6, fleet: 1.3, boss: 0 },
+    hardGroundGradient: 0.26,
+    maxMineCharge: 6,
+    bands: bandsWithBoss(150, 220),
+    timerSeconds: 1000,
+    startingCharge: 12,
+    maxPlayerCharge: 14,
+    blastPctByTier: BLAST_PCT,
+    blastRadius: 2,
+    blastFalloff: 0.4,
+    chargeGainPerOverlap: 1,
+    chargeConversion: 3,
+    chargeRegenPerSecond: 1.3,
     scoreDifficultyMultiplier: 2.4,
   },
 }
