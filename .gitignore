@@ -8,3 +8,4 @@ coverage/
 
 # session scratch (debug/sim throwaways)
 .scratch/
+dist-embed/
