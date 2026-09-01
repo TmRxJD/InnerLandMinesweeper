@@ -193,6 +193,33 @@ function hasRevealedNeighbour(t: TileView, snap: BoardSnapshot, w: number): bool
   return false
 }
 
+/** How many of a tile's 8 neighbours are already cleared ground. */
+function clearedNeighbourCount(t: TileView, snap: BoardSnapshot): number {
+  const w = snap.width
+  let n = 0
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue
+      const o = snap.tiles[(t.coord.y + dy) * w + (t.coord.x + dx)]
+      if (o && (o.state === 'cleared' || o.state === 'detonated')) n++
+    }
+  }
+  return n
+}
+
+/** Choose the next tile to uncover with intent instead of scanning rows. Among the frontier (tiles
+ *  touching already-cleared ground — so the explored area grows as one connected region, never a
+ *  teleporting cursor) prefer the tile boxed in by the MOST cleared neighbours. That fills concave
+ *  pockets first and grows the cleared area as a smooth, rounded blob — it reads as a player working
+ *  a region rather than a cursor scanning left-to-right — and it's actually *faster* than a row scan,
+ *  because a compact front feeds the blast-clears better. (A centre-ward bias was tried and dropped:
+ *  it dragged the front inward and slowed the clear badly, especially on the big Hard board.) */
+function pickReveal(tappable: TileView[], snap: BoardSnapshot): TileView | null {
+  const frontier = tappable.filter(t => hasRevealedNeighbour(t, snap, snap.width))
+  const pool = frontier.length > 0 ? frontier : tappable
+  return bestBy(pool, t => clearedNeighbourCount(t, snap))
+}
+
 /** One move for the given board, or null if there is nothing useful to do right now.
  *
  * The strategy is three phases, in priority order:
@@ -235,8 +262,8 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
     // Still ground to clear. Reveal if we can afford it; otherwise wait for charge to regen —
     // do NOT raid the near mines to make a move.
     if (snap.playerCharge >= 1) {
-      const frontier = tappable.find(t => hasRevealedNeighbour(t, snap, snap.width)) ?? tappable[0]!
-      return { type: 'reveal', coord: frontier.coord }
+      const pick = pickReveal(tappable, snap)
+      if (pick) return { type: 'reveal', coord: pick.coord }
     }
     return null // broke — regen will let us keep clearing next tick
   }
