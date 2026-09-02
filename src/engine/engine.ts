@@ -182,10 +182,13 @@ class Engine implements MinesweeperEngine {
     //     Picks are deterministic (seeded from this exact detonation) so a seed still reproduces a run,
     //     and they never touch mines or the Boss — shrapnel can't cheese the moated kill.
     const shrapnelKills = Math.floor(stack * this.cfg.shrapnelPerStack)
-    if (shrapnelKills > 0) {
+    // Shrapnel reaches one tile past the blast (radius+1), but never beyond the hard cap — so a big
+    // mine's shrapnel can't fly clear across the board.
+    const shrapnelReach = Math.min(radius + 1, this.cfg.shrapnelMaxReach)
+    if (shrapnelKills > 0 && shrapnelReach > radius) {
       const inner = new Set(radiusTiles.map(t => t.y * this.board.width + t.x))
       const ring: Tile[] = []
-      for (const t of withinRadius(this.board, tile.x, tile.y, radius + 1)) {
+      for (const t of withinRadius(this.board, tile.x, tile.y, shrapnelReach)) {
         if (inner.has(t.y * this.board.width + t.x)) continue // already inside the blast
         if (t.isMine || t.tier === 'boss') continue // mines/Boss handled at 4a; shrapnel is ground only
         if (t.state !== 'covered' || t.hp <= 0) continue // only still-standing field enemies
@@ -258,6 +261,9 @@ class Engine implements MinesweeperEngine {
    *  Boss as hit this action (so its regen counter resets). */
   private damageBoss(bossTile: Tile, amount: number, events: GameEvent[]): void {
     this.bossHitThisAction = true
+    // The shield GATES HP but doesn't waste damage: the hit fills the shield first, and only the
+    // OVERFLOW past it reaches HP. So a hit smaller than the shield deals zero HP damage (shield
+    // must be down to hurt the Boss), but a hit that breaks the shield carries its remainder through.
     let dmg = amount
     if (this.bossShield > 0) {
       const absorbed = Math.min(this.bossShield, dmg)

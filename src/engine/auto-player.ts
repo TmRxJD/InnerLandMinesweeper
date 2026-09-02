@@ -263,8 +263,9 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
   // is earned, not regenerated, so the mines must do the clearing). When the surplus runs out we STOP
   // clearing with mines and commit the remainder to the kill — that's what stops us over-spending the
   // pool and losing.
-  // The Boss hides behind a regenerating shield: a delivery must punch through shield AND HP, so the
-  // effective health to plan against is the sum (read live, since the shield regrows when neglected).
+  // The Boss hides behind a regenerating shield: a delivery must punch through shield AND HP, and the
+  // overflow carries through, so the effective health to plan against is just their sum (read live,
+  // since the shield regrows when neglected).
   const bossEffHp = snap.bossHp + snap.bossShield
   const need = Math.ceil(Math.sqrt(2 * bossEffHp)) + 2
   const surplus = snap.minesRemaining - need

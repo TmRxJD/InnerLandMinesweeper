@@ -77,6 +77,11 @@ export interface DifficultyConfig {
    *  payoff for a big stack — a reason to grow mines even when the Boss is nowhere near. At 1.0 a 3×
    *  blast takes 3 bonus enemies with it. */
   readonly shrapnelPerStack: number
+  /** Hard cap (Chebyshev, from the blast centre) on how far shrapnel can reach. The natural ring is
+   *  one tile outside the blast (radius+1), but for a big blast that ring is far from centre — so this
+   *  caps it: shrapnel never lands beyond a full-size blast's footprint. A big mine can shred a LOT,
+   *  but it can't reach clear across the board. */
+  readonly shrapnelMaxReach: number
   /** Fraction of a detonated mine's stack that converts into the player's charge pool. */
   readonly chargeConversion: number
   /** Multiplier applied to the (par − time) score on this difficulty. */
@@ -126,6 +131,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     killerMargin: 6, // easy: spread chain wins on its own, hooks optional
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
+    shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
     chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 1,
   },
@@ -153,6 +159,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     killerMargin: 3, // standard: needs a few hooks on many boards, hook-free on some
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
+    shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
     chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 1.6,
   },
@@ -180,6 +187,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     killerMargin: 1, // hard: minimal mines -> must hook a tight cluster; rare seeds win hook-free
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
+    shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
     chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 2.4,
   },

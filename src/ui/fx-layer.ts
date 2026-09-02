@@ -159,7 +159,10 @@ export class FxLayer {
     this.running = true
     this.lastT = performance.now()
     const step = (t: number) => {
-      const dt = Math.min(0.05, (t - this.lastT) / 1000)
+      // Clamp to [0, 0.05]: a negative delta (rAF timestamp before lastT, which can happen on the
+      // first frame or after a tab was hidden) would run updates BACKWARD and drive a shockwave's
+      // radius negative — and a negative arc() radius throws, killing this whole loop.
+      const dt = Math.max(0, Math.min(0.05, (t - this.lastT) / 1000))
       this.lastT = t
       this.update(dt)
       this.draw()
@@ -203,7 +206,7 @@ export class FxLayer {
     this.clear()
     for (const s of this.shocks) {
       ctx.beginPath()
-      ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2)
+      ctx.arc(s.x, s.y, Math.max(0, s.radius), 0, Math.PI * 2) // never let a bad radius throw and kill the loop
       ctx.strokeStyle = `rgba(53, 224, 255, ${Math.max(0, s.life) * 0.38})`
       ctx.lineWidth = 1.6 * Math.max(0.2, s.life)
       ctx.stroke()
@@ -231,7 +234,7 @@ export class FxLayer {
       ctx.globalAlpha = Math.max(0, p.life)
       ctx.fillStyle = p.color
       ctx.beginPath()
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+      ctx.arc(p.x, p.y, Math.max(0, p.size), 0, Math.PI * 2)
       ctx.fill()
     }
     ctx.globalAlpha = 1

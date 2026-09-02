@@ -196,7 +196,7 @@ export class GameApp {
             <span class="ilm-stat__value" data-mines>0</span>
           </div>
         </div>
-        <div class="ilm-bossbar" data-bossbar hidden>
+        <div class="ilm-bossbar" data-bossbar>
           <span class="ilm-bossbar__label">Boss</span>
           <div class="ilm-bossbar__track">
             <div class="ilm-bossbar__fill" data-bossfill></div>
@@ -637,8 +637,8 @@ export class GameApp {
     const bossTotal = snap.bossMaxHp + snap.bossShieldMax
     const hpPct = bossTotal > 0 ? (snap.bossHp / bossTotal) * 100 : 0
     const shieldPct = bossTotal > 0 ? (snap.bossShield / bossTotal) * 100 : 0
-    // Show once the Boss has taken any hit to HP or shield (full/untouched at first).
-    this.elBossBar.hidden = snap.bossHp >= snap.bossMaxHp && snap.bossShield >= snap.bossShieldMax
+    // Always visible — the Boss is the whole point, so its bar is a permanent fixture (full at first).
+    this.elBossBar.hidden = false
     this.elBossFill.style.setProperty('--boss-pct', `${hpPct}%`)
     this.elBossShield.style.setProperty('--shield-left', `${hpPct}%`)
     this.elBossShield.style.setProperty('--shield-pct', `${shieldPct}%`)
