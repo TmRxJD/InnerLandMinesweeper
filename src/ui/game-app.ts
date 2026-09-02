@@ -810,17 +810,19 @@ export class GameApp {
    *  "hook this one through the enemy in the way") instead of following brittle rules. Seeded from the
    *  exact position + a fixed iteration count, so it is DETERMINISTIC: the coach hint and Autoplay call
    *  this and get the identical move — the ring you see is exactly what Autoplay would do. */
-  private planAction(): AutoAction | null {
+  private planAction(iterations: number): AutoAction | null {
     const s = this.engine.snapshot()
     const seedRng = new Rng(`${s.moves}|${s.minesRemaining}|${s.bossHp}|${s.bossShield}|${s.hookCharges}|${Math.round(s.playerCharge)}`)
-    return chooseAction(this.engine, { iterations: 60, rng: () => seedRng.float() })
+    return chooseAction(this.engine, { iterations, rng: () => seedRng.float() })
   }
 
   /** A meaningful, situation-specific hint: it asks the planner what to do next on THIS board and
    *  turns that into advice, pointing at the tile (highlighted) for the safe cases. Reveal targets are
    *  never highlighted — that would spoil a hidden mine's location. */
   private coachHint(snap: BoardSnapshot): { msg: string; target: number | null } {
-    const action = this.planAction()
+    // Lighter search for the live hint so manual play stays responsive (it still points at a good
+    // move); Autoplay uses the heavy 600-iteration search below.
+    const action = this.planAction(180)
     const w = snap.width
     const bx = Math.floor(w / 2)
     const by = Math.floor(snap.height / 2)
@@ -1071,7 +1073,7 @@ export class GameApp {
     // The demo plays the intelligent planned move — the SAME deterministic MCTS the Hints point at —
     // so watching Autoplay is watching the coach's advice carried out, tile by tile, by a search that
     // actually reasons about outcomes rather than a rule-following script.
-    const action = this.planAction()
+    const action = this.planAction(600)
     if (!action) return this.demoRestart(1200) // no move — next board
 
     const sigBefore = this.progressSig(snap)

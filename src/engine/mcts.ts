@@ -39,7 +39,7 @@ const DEFAULTS = {
   iterations: 60,
   explore: 1.3,
   revealSamples: 8,
-  rolloutCap: 180,
+  rolloutCap: 24, // short: let the rich evaluation (not 90 moves of playout) decide the move
 } as const
 
 /** Game-time charged per action in playouts — matches the balance harness so the AI optimises the
@@ -148,17 +148,61 @@ function sample<T>(items: readonly T[], k: number, rng: () => number): T[] {
   return arr.slice(0, k)
 }
 
-/** Score a finished-or-abandoned playout. A win dominates everything (and a faster win scores higher);
- *  an unfinished line is valued by how far it got — ground cleared and Boss chipped down — so the
- *  search still climbs toward the goal before any playout reaches it. */
+/** How good is this position? This is the AI's UNDERSTANDING of the game — with a coarse score (just
+ *  cleared% + boss%) every playout that reaches a similar board looks identical, so no move stands out
+ *  and it plays randomly no matter how deep it searches. So this scores the *strategy* of a position:
+ *
+ *   - progress toward the two win conditions (field cleared, Boss dead), the dominant terms;
+ *   - a big GATHERED cluster near the Boss — armed mines in (or near) strike range, weighted by stack,
+ *     because that packed blob is what actually delivers the kill (it's most of "playing well");
+ *   - stack size — the overlap-boost payoff — so building a fat mine reads as progress;
+ *   - resources banked (ammo, hooks, charge) — lightly;
+ *   - and an explicit LOSS penalty, so it actively avoids throwing the run (the old eval scored a loss
+ *     as mildly positive, so it barely cared about losing).
+ *
+ *  Paired with a short rollout cap, this lets even a light search choose moves that visibly build and
+ *  deliver, instead of averaging out over 90 moves of playout. */
 function evaluate(engine: MinesweeperEngine): number {
   const s = engine.snapshot()
-  if (s.status === 'won') return 10_000 - s.timeElapsed // faster win → higher
+  // A win dominates everything — but a win in FEWER MOVES and LESS TIME scores higher, so the search
+  // strives to finish efficiently (plan the fewest, biggest moves) rather than bumble to the line.
+  if (s.status === 'won') return 100_000 - s.moves * 60 - s.timeElapsed * 8
+  if (s.status === 'lost') return -60_000 // losing is strictly bad
+
+  const boss = bossOf(s)
+  const strikeRange = s.blastRadiusCap + 1 // a mine this close can hit the Boss
   let clearedOrGone = 0
-  for (const t of s.tiles) if (t.state === 'cleared' || t.state === 'detonated') clearedOrGone++
+  let clusterValue = 0 // gathered killing power near the Boss, weighted by stack and proximity
+  let biggestStack = 0
+  let armedStackTotal = 0
+  for (const t of s.tiles) {
+    if (t.state === 'cleared' || t.state === 'detonated') clearedOrGone++
+    else if (t.state === 'armed') {
+      const stk = t.mineCharge ?? 1
+      armedStackTotal += stk
+      if (stk > biggestStack) biggestStack = stk
+      const d = cheb(t.coord, boss)
+      // In strike range → full value; otherwise decays with distance (a mine 3 rings out is worth
+      // far less than one on the doorstep). This makes GATHERING toward the Boss score as progress.
+      clusterValue += d <= strikeRange ? stk : stk / (1 + (d - strikeRange))
+    }
+  }
   const clearedFraction = clearedOrGone / s.tiles.length
   const bossFraction = s.bossMaxHp > 0 ? 1 - s.bossHp / s.bossMaxHp : 1
-  return (clearedFraction * 0.6 + bossFraction * 0.4) * 1000 // 0..1000, always below any win
+  const shieldStripped = s.bossShieldMax > 0 ? 1 - s.bossShield / s.bossShieldMax : 1
+
+  return (
+    clearedFraction * 5000 + // clearing the field is one of the two win conditions
+    bossFraction * 4000 + // HP damage is the other
+    shieldStripped * 600 + // stripping the shield is real progress toward HP damage
+    clusterValue * 90 + // a packed, in-range cluster is the thing that wins — reward building it
+    biggestStack * 40 + // growing a fat mine (overlap payoff) is progress
+    armedStackTotal * 6 + // some armed ordnance on the board is good
+    s.minesRemaining * 8 + // ammo in reserve
+    s.hookCharges * 15 - // hooks are the only delivery tool across the moat — hoard a few
+    s.moves * 10 - // gentle MOVE penalty: prefer the same progress in fewer moves, but don't starve the
+    s.timeElapsed * 6 // necessary setup (gathering/finding). The big fewer-moves reward is on the WIN.
+  )
 }
 
 /** One playout from `engine` (mutated in place): play the heuristic policy — with a dash of random
