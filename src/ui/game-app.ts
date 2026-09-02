@@ -13,6 +13,7 @@ import { createEngine } from '../engine/engine'
 import { DIFFICULTIES } from '../engine/tuning'
 import { randomSeed } from '../engine/rng'
 import { chooseAction } from '../engine/mcts'
+import { autoPlay } from '../engine/auto-player'
 import type { BoardSnapshot, Coord, Difficulty, EventList, GameResult, MinesweeperEngine, Tier, TileView } from '../engine/types'
 import { FxLayer } from './fx-layer'
 
@@ -130,6 +131,8 @@ export class GameApp {
   private demoTimers: ReturnType<typeof setTimeout>[] = []
   private cursor!: HTMLElement
   private hintsOn = false
+  private lastCoachSig = ''
+  private hintTarget: number | null = null
 
   private readonly onResult: ((r: GameResult) => void) | undefined
 
@@ -387,6 +390,7 @@ export class GameApp {
     const btn = this.root.querySelector<HTMLButtonElement>('[data-hints]')!
     btn.classList.toggle('is-active', this.hintsOn)
     btn.setAttribute('aria-pressed', String(this.hintsOn))
+    this.lastCoachSig = '' // force a fresh hint on toggle (the position signature may be unchanged)
     this.updateCoach(this.engine.snapshot())
   }
 
@@ -517,6 +521,8 @@ export class GameApp {
     this.width = snap.width
     this.height = snap.height
     this.focusIndex = 0
+    this.hintTarget = null // the grid is rebuilt below; drop the stale highlight reference
+    this.lastCoachSig = ''
     this.buildGrid(snap)
     this.fitBoard()
     this.banner.classList.remove('is-shown', 'win', 'lose')
@@ -761,16 +767,18 @@ export class GameApp {
     }
     this.elHookCount.textContent = String(snap.hookCharges)
     this.elMines.textContent = String(snap.minesRemaining)
-    // Boss bar: HP (magenta) with the shield (cyan) layered in front on the right — the shield
-    // absorbs first and regrows when the Boss is neglected. Bar scaled to HP + shield together.
-    const bossTotal = snap.bossMaxHp + snap.bossShieldMax
-    const hpPct = bossTotal > 0 ? (snap.bossHp / bossTotal) * 100 : 0
-    const shieldPct = bossTotal > 0 ? (snap.bossShield / bossTotal) * 100 : 0
+    // Boss bar: the magenta bar is HP at FULL scale (100% when undamaged, so the Boss visibly
+    // *starts full*). The shield is a cyan sheen layered ON TOP of the HP's leading edge — it
+    // absorbs damage first (so it depletes before HP) and regrows when the Boss is neglected. The
+    // sheen is sized relative to HP-max, so a full shield covers the front slice of a full health bar.
+    const hpPct = snap.bossMaxHp > 0 ? (snap.bossHp / snap.bossMaxHp) * 100 : 0
+    const sheenW = snap.bossMaxHp > 0 ? Math.min((snap.bossShield / snap.bossMaxHp) * 100, hpPct) : 0
+    const sheenLeft = Math.max(0, hpPct - sheenW)
     // Always visible — the Boss is the whole point, so its bar is a permanent fixture (full at first).
     this.elBossBar.hidden = false
     this.elBossFill.style.setProperty('--boss-pct', `${hpPct}%`)
-    this.elBossShield.style.setProperty('--shield-left', `${hpPct}%`)
-    this.elBossShield.style.setProperty('--shield-pct', `${shieldPct}%`)
+    this.elBossShield.style.setProperty('--shield-left', `${sheenLeft}%`)
+    this.elBossShield.style.setProperty('--shield-pct', `${sheenW}%`)
     this.elBossHp.textContent = snap.bossShieldMax > 0
       ? `${snap.bossHp}+${snap.bossShield}`
       : `${snap.bossHp}/${snap.bossMaxHp}`
@@ -780,27 +788,82 @@ export class GameApp {
   /** A live one-line hint reflecting what the player should do next — the main "what is
    *  happening / what do I do" indicator. */
   private updateCoach(snap: BoardSnapshot): void {
+    if (!this.hintsOn) { this.setHintTarget(null); return } // slot stays reserved (CSS); nothing to show
     if (snap.status !== 'playing') {
       this.elCoach.textContent = ''
+      this.setHintTarget(null)
       return
     }
-    const armed = snap.tiles.some(t => t.state === 'armed')
-    const cleared = snap.tiles.some(t => t.state === 'cleared')
-    const bossHurt = snap.bossHp < snap.bossMaxHp
+    // The hint reflects the strongest *actual* next move for this exact board, so it changes as you
+    // play and points somewhere real. Recompute only when the position meaningfully changes (moves,
+    // ammo, Boss, charge, armed count) — cheap, and it keeps the line from flickering every frame.
+    const armedCount = snap.tiles.reduce((n, t) => n + (t.state === 'armed' ? 1 : 0), 0)
+    const sig = `${snap.moves}|${snap.minesRemaining}|${snap.bossHp}|${snap.bossShield}|${snap.hookCharges}|${Math.round(snap.playerCharge)}|${armedCount}`
+    if (sig === this.lastCoachSig) return
+    this.lastCoachSig = sig
+    const hint = this.coachHint(snap)
+    this.elCoach.textContent = hint.msg
+    this.setHintTarget(hint.target)
+  }
 
-    let msg: string
-    if (!cleared && !armed) {
-      msg = 'Tap tiles to clear the field and find mines — a mine arms as a glowing orb.'
-    } else if (snap.hookCharges > 0 && armed) {
-      msg = `You hold ${snap.hookCharges} Magnetic Hook — right-click (or long-press) an armed mine to pull it toward the Boss.`
-    } else if (bossHurt && armed) {
-      msg = 'Deliver charged mine blasts to the centre — only blasts hurt the Boss.'
-    } else if (armed) {
-      msg = 'Detonate mines to clear ground and pump nearby mines’ stacks. Grow big stacks toward the centre.'
-    } else {
-      msg = 'Tap to open lanes and uncover mines; blasts clear far faster than tapping.'
+  /** A meaningful, situation-specific hint: it asks the reference player what it would do next on
+   *  THIS board and turns that into advice, pointing at the tile (highlighted) for the safe cases.
+   *  Reveal targets are never highlighted — that would spoil a hidden mine's location. */
+  private coachHint(snap: BoardSnapshot): { msg: string; target: number | null } {
+    const action = autoPlay(snap)
+    const w = snap.width
+    const bx = Math.floor(w / 2)
+    const by = Math.floor(snap.height / 2)
+    const cheb = (x: number, y: number) => Math.max(Math.abs(x - bx), Math.abs(y - by))
+    const need = Math.ceil(Math.sqrt(2 * (snap.bossHp + snap.bossShield))) + 2
+    const tightAmmo = snap.minesRemaining - need <= 1
+    const shieldUp = snap.bossShield > 0
+
+    if (!action) {
+      return { msg: 'No move left — if the Boss can\'t be reached, restart for a fresh board.', target: null }
     }
-    this.elCoach.textContent = msg
+
+    if (action.type === 'hook') {
+      const idx = action.coord.y * w + action.coord.x
+      const msg = shieldUp
+        ? 'Hook the ringed mine inward — pack a tight cluster on the Boss; only a fat, gathered blast breaks the shield.'
+        : 'Hook the ringed mine inward — the shield\'s down, so gather your blob and finish the Boss\'s HP.'
+      return { msg, target: idx }
+    }
+
+    if (action.type === 'detonate') {
+      const idx = action.coord.y * w + action.coord.x
+      const stack = snap.tiles[idx]?.mineCharge ?? 1
+      const nearBoss = cheb(action.coord.x, action.coord.y) <= snap.gatherRadius + 1
+      if (nearBoss) {
+        const msg = shieldUp
+          ? `Set off the ringed ${stack}× on the Boss — knock the shield down, then keep hitting before it regrows.`
+          : `Fire the ringed ${stack}× into the Boss now — its shield is down, so this lands on HP.`
+        return { msg, target: idx }
+      }
+      const msg = tightAmmo
+        ? `Ammo's tight — the ringed ${stack}× is the blast that clears the most ground for the fewest mines. Save the rest for the Boss.`
+        : `Detonate the ringed ${stack}× — it clears a swath and *pumps* the mines it touches (the bigger the mine, the bigger the boost).`
+      return { msg, target: idx }
+    }
+
+    // reveal — deliberately un-highlighted (would give away a hidden mine)
+    if (snap.playerCharge <= 1) {
+      return { msg: 'Low on charge — detonate a mine to refuel; taps cost charge, blasts refund it.', target: null }
+    }
+    const anyArmed = snap.tiles.some(t => t.state === 'armed')
+    const msg = anyArmed
+      ? 'Open a little more ground, then chain your armed mines — a blast clears its whole square for free.'
+      : 'Tap the frontier to open ground and uncover mines — finding a mine is good; it arms as a glowing orb.'
+    return { msg, target: null }
+  }
+
+  /** Ring a single tile as the suggested move (a glow that never affects layout). */
+  private setHintTarget(idx: number | null): void {
+    if (this.hintTarget === idx) return
+    if (this.hintTarget !== null) this.tiles[this.hintTarget]?.classList.remove('hint-target')
+    this.hintTarget = idx
+    if (idx !== null) this.tiles[idx]?.classList.add('hint-target')
   }
 
   private renderTile(el: HTMLButtonElement, t: TileView): void {

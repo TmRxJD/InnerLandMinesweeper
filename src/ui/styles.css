@@ -221,14 +221,23 @@
 
 /* ---- Coach line (live "what to do" hint, off unless Hints is toggled) ---- */
 
-.ilm-coach { display: none; }
-.ilm-root.hints-on .ilm-coach {
-  display: block;
-  min-height: 18px;
+/* The coach line reserves a FIXED two-line slot at all times (visible only with Hints on) — so
+   toggling Hints, or a hint growing/shrinking, can never change the panel's height. The board and
+   everything around it stay locked in place. Text is clamped to the two lines it's sized for. */
+.ilm-coach {
+  height: 34px;
   font-size: 13px;
+  line-height: 1.3;
   color: var(--energy);
   padding-left: 2px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  visibility: hidden;
 }
+.ilm-root.hints-on .ilm-coach { visibility: visible; }
 
 /* ---- Help dialog ----------------------------------------------------- */
 
@@ -520,6 +529,17 @@
   0% { box-shadow: 0 0 0 0 rgba(255, 171, 61, 0.95); background-color: rgba(255, 171, 61, 0.4); }
   100% { box-shadow: 0 0 0 7px rgba(255, 171, 61, 0); background-color: transparent; }
 }
+/* Hints: ring the single tile the coach line is pointing at. box-shadow only, so it never nudges
+   layout; sits above neighbours. Gentle pulse, static under reduced-motion. */
+.ilm-tile.hint-target {
+  z-index: 8;
+  box-shadow: 0 0 0 2px var(--energy), 0 0 12px 2px color-mix(in srgb, var(--energy) 65%, transparent);
+}
+.ilm-root:not(.reduce-motion) .ilm-tile.hint-target { animation: ilm-hint-pulse 1.15s ease-in-out infinite; }
+@keyframes ilm-hint-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--energy), 0 0 7px 1px color-mix(in srgb, var(--energy) 55%, transparent); }
+  50% { box-shadow: 0 0 0 2px var(--energy), 0 0 16px 4px color-mix(in srgb, var(--energy) 75%, transparent); }
+}
 .ilm-tile.blast-hit { animation: ilm-blast-hit 500ms ease-out; }
 .ilm-tile.blast-origin { animation: ilm-blast-origin 500ms ease-out; z-index: 7; }
 .ilm-tile.shrapnel-hit { animation: ilm-shrapnel-hit 500ms ease-out; z-index: 6; }
@@ -671,16 +691,18 @@
   box-shadow: 0 0 10px var(--enemy-boss, #ff5bd0);
   transition: width 220ms ease;
 }
-/* The shield sits in front of HP (the right portion of the bar) and depletes first — cyan, so it
-   reads as a separate layer from the magenta HP. It regrows when the Boss is left alone. */
+/* The shield is a cyan sheen ON TOP of the HP fill, at its leading edge — the HP (magenta) shows
+   through, so the bar reads as a *full* health bar wearing a shield. It absorbs first (depletes
+   before HP) and regrows when the Boss is left alone. */
 .ilm-bossbar__shield {
   position: absolute;
   top: 0;
   height: 100%;
   left: var(--shield-left, 100%);
   width: var(--shield-pct, 0%);
-  background: linear-gradient(90deg, var(--energy-dim), var(--energy));
-  box-shadow: 0 0 8px var(--energy);
+  background: linear-gradient(180deg, rgba(198, 249, 255, 0.72), rgba(53, 224, 255, 0.32));
+  box-shadow: inset 0 0 6px rgba(53, 224, 255, 0.55);
+  border-left: 1px solid rgba(53, 224, 255, 0.85);
   transition: left 220ms ease, width 220ms ease;
 }
 .ilm-bossbar__hp {
