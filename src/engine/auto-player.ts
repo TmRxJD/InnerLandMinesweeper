@@ -263,14 +263,17 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
   // is earned, not regenerated, so the mines must do the clearing). When the surplus runs out we STOP
   // clearing with mines and commit the remainder to the kill — that's what stops us over-spending the
   // pool and losing.
-  const need = Math.ceil(Math.sqrt(2 * snap.bossHp)) + 2
+  // The Boss hides behind a regenerating shield: a delivery must punch through shield AND HP, so the
+  // effective health to plan against is the sum (read live, since the shield regrows when neglected).
+  const bossEffHp = snap.bossHp + snap.bossShield
+  const need = Math.ceil(Math.sqrt(2 * bossEffHp)) + 2
   const surplus = snap.minesRemaining - need
   const canHitBoss = (m: TileView): boolean =>
     cheb(m.coord, boss) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1
   // The squad = the armed mines nearest the Boss (the deliverables). Prefer spending FAR mines on the
   // field so the near ones stay cheap to hook in.
   const squad = [...mines].sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, need)
-  const lethal = squad.length > 0 && predictChainDamage(squad, boss, snap) >= snap.bossHp
+  const lethal = squad.length > 0 && predictChainDamage(squad, boss, snap) >= bossEffHp
 
   // === Boss delivery. Fire the squad the instant it's lethally gathered; otherwise, once we're out
   //     of surplus, commit to hooking it across the moat. While surplus remains we keep clearing (and

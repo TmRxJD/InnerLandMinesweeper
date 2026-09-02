@@ -620,6 +620,7 @@
   color: var(--enemy-boss, #ff5bd0);
 }
 .ilm-bossbar__track {
+  position: relative;
   flex: 1;
   height: 8px;
   border-radius: 6px;
@@ -632,6 +633,18 @@
   background: linear-gradient(90deg, #ff5bd0, #ff9be6);
   box-shadow: 0 0 10px var(--enemy-boss, #ff5bd0);
   transition: width 220ms ease;
+}
+/* The shield sits in front of HP (the right portion of the bar) and depletes first — cyan, so it
+   reads as a separate layer from the magenta HP. It regrows when the Boss is left alone. */
+.ilm-bossbar__shield {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  left: var(--shield-left, 100%);
+  width: var(--shield-pct, 0%);
+  background: linear-gradient(90deg, var(--energy-dim), var(--energy));
+  box-shadow: 0 0 8px var(--energy);
+  transition: left 220ms ease, width 220ms ease;
 }
 .ilm-bossbar__hp {
   font-size: 12px;

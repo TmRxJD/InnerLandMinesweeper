@@ -28,6 +28,16 @@ export interface DifficultyConfig {
   /** Boss HP. The Boss is the only multi-hit tile; it must take several stacked blasts, so keep
    *  it comfortably above `stackCap` (≈2.5×) or a single maxed mine one-shots the climax. */
   readonly bossHp: number
+  /** Boss shield: a buffer that absorbs blast damage BEFORE HP, and — unlike HP — regrows if you
+   *  leave the Boss alone (see below). It stops a single overkill cluster from one-shotting the
+   *  climax and, with regen, punishes clearing the whole board in peace then alpha-striking. */
+  readonly bossShield: number
+  /** Moves the Boss can go UNHARMED before its shield starts regrowing (a grace window so a normal
+   *  gather-then-strike isn't fighting regen the whole time). */
+  readonly bossRegenDelayMoves: number
+  /** Shield regained per move once past the delay, capped at `bossShield`. Keep it slow — it's a
+   *  "don't dawdle" nudge, not a wall. */
+  readonly bossShieldRegenPerMove: number
   /** Target clear time in seconds — the par used for score and medals. NOT a loss timer;
    *  running past it just lowers the score. */
   readonly parSeconds: number
@@ -99,7 +109,10 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 30,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
-    bossHp: 18,
+    bossHp: 14,
+    bossShield: 5,
+    bossRegenDelayMoves: 4,
+    bossShieldRegenPerMove: 1,
     parSeconds: 50,
     goldSeconds: 30,
     silverSeconds: 38,
@@ -123,7 +136,10 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 45,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
-    bossHp: 37,
+    bossHp: 30,
+    bossShield: 9,
+    bossRegenDelayMoves: 4,
+    bossShieldRegenPerMove: 1,
     parSeconds: 66,
     goldSeconds: 44,
     silverSeconds: 54,
@@ -147,7 +163,10 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 70,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
-    bossHp: 52,
+    bossHp: 42,
+    bossShield: 12,
+    bossRegenDelayMoves: 4,
+    bossShieldRegenPerMove: 2,
     parSeconds: 90,
     goldSeconds: 60,
     silverSeconds: 74,

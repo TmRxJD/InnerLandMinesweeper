@@ -94,6 +94,7 @@ export class GameApp {
   private target: number | undefined
   private elBossBar!: HTMLElement
   private elBossFill!: HTMLElement
+  private elBossShield!: HTMLElement
   private elBossHp!: HTMLElement
   private elCoach!: HTMLElement
   /** Pending long-press timer id for touch-triggered hook pulls. */
@@ -144,6 +145,7 @@ export class GameApp {
     this.elMines = root.querySelector('[data-mines]')!
     this.elBossBar = root.querySelector('[data-bossbar]')!
     this.elBossFill = root.querySelector('[data-bossfill]')!
+    this.elBossShield = root.querySelector('[data-bossshield]')!
     this.elBossHp = root.querySelector('[data-bosshp]')!
     this.elCoach = root.querySelector('[data-coach]')!
     this.helpDialog = root.querySelector('[data-help-dialog]')!
@@ -196,7 +198,10 @@ export class GameApp {
         </div>
         <div class="ilm-bossbar" data-bossbar hidden>
           <span class="ilm-bossbar__label">Boss</span>
-          <div class="ilm-bossbar__track"><div class="ilm-bossbar__fill" data-bossfill></div></div>
+          <div class="ilm-bossbar__track">
+            <div class="ilm-bossbar__fill" data-bossfill></div>
+            <div class="ilm-bossbar__shield" data-bossshield></div>
+          </div>
           <span class="ilm-bossbar__hp" data-bosshp></span>
         </div>
         <div class="ilm-controls">
@@ -268,8 +273,10 @@ export class GameApp {
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
             <div><b>The Boss</b> sits at the centre — the only multi-hit enemy, and <b>only mine blasts
-              hurt it</b> (taps do nothing). Hook charged mines in beside it and detonate; a bigger stack
-              hits harder. Its HP bar shows at the top of the board.</div>
+              hurt it</b> (taps do nothing). It's guarded by a <b style="color:var(--energy)">shield</b>
+              (the cyan layer on its bar) that soaks damage before its HP — and <b>regrows if you leave
+              the Boss alone</b>, so you can't clear the whole board in peace and then finish it. Hook
+              charged mines in and commit: hit it hard and keep hitting, don't dawdle.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--flag">✓</span>
@@ -551,6 +558,14 @@ export class GameApp {
             this.pulseTile(e.coord, 'shrapnel-hit')
           }
           break
+        case 'bossShieldChanged':
+          // Shield absorbed a hit (to < from): a cyan spark on the Boss, so you see the shield
+          // eat it rather than the blast landing on HP. Regen (to > from) is shown by the bar only.
+          if (e.to < e.from) {
+            const s = this.engine.snapshot()
+            this.fx.chargeSpark(Math.floor(s.width / 2), Math.floor(s.height / 2), 1)
+          }
+          break
         case 'gameWon':
           this.onEnd(e.result, true)
           break
@@ -617,11 +632,19 @@ export class GameApp {
     }
     this.elHookCount.textContent = String(snap.hookCharges)
     this.elMines.textContent = String(snap.minesRemaining)
-    // Boss bar: show once the boss has taken a hit (it's covered/full at first).
-    const bossPct = snap.bossMaxHp > 0 ? (snap.bossHp / snap.bossMaxHp) * 100 : 0
-    this.elBossBar.hidden = snap.bossHp >= snap.bossMaxHp
-    this.elBossFill.style.setProperty('--boss-pct', `${bossPct}%`)
-    this.elBossHp.textContent = `${snap.bossHp}/${snap.bossMaxHp}`
+    // Boss bar: HP (magenta) with the shield (cyan) layered in front on the right — the shield
+    // absorbs first and regrows when the Boss is neglected. Bar scaled to HP + shield together.
+    const bossTotal = snap.bossMaxHp + snap.bossShieldMax
+    const hpPct = bossTotal > 0 ? (snap.bossHp / bossTotal) * 100 : 0
+    const shieldPct = bossTotal > 0 ? (snap.bossShield / bossTotal) * 100 : 0
+    // Show once the Boss has taken any hit to HP or shield (full/untouched at first).
+    this.elBossBar.hidden = snap.bossHp >= snap.bossMaxHp && snap.bossShield >= snap.bossShieldMax
+    this.elBossFill.style.setProperty('--boss-pct', `${hpPct}%`)
+    this.elBossShield.style.setProperty('--shield-left', `${hpPct}%`)
+    this.elBossShield.style.setProperty('--shield-pct', `${shieldPct}%`)
+    this.elBossHp.textContent = snap.bossShieldMax > 0
+      ? `${snap.bossHp}+${snap.bossShield}`
+      : `${snap.bossHp}/${snap.bossMaxHp}`
     this.updateCoach(snap)
   }
 

@@ -87,6 +87,10 @@ export interface BoardSnapshot {
   /** Current / starting Boss HP — for the HUD boss bar. */
   readonly bossHp: number
   readonly bossMaxHp: number
+  /** Current / starting Boss shield — the buffer that absorbs blast damage before HP and regrows
+   *  when the Boss is left alone. Shown as a layer on the boss bar. */
+  readonly bossShield: number
+  readonly bossShieldMax: number
   /** Held Magnetic Hook charges — spend one to pull an armed mine a tile toward the Boss. */
   readonly hookCharges: number
   /** Caps for this difficulty, so a strategy layer (bot / UI) can reason about stacks & reach. */
@@ -137,6 +141,8 @@ export type GameEvent =
   // A Magnetic Hook tile was collected (charge gained), or a charge was spent to pull a mine.
   | { kind: 'hookCharged'; coord: Coord; to: number }
   | { kind: 'hookUsed'; from: Coord; to: Coord; charges: number }
+  // The Boss shield changed — absorbed a hit (to < from) or regrew from neglect (to > from).
+  | { kind: 'bossShieldChanged'; from: number; to: number }
   | { kind: 'gameWon'; result: GameResult }
   // The Boss can no longer be killed with the mines left on the board — the run is lost.
   | { kind: 'gameLost'; result: GameResult }

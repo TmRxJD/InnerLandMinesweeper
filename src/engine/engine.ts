@@ -44,6 +44,14 @@ class Engine implements MinesweeperEngine {
   private hookCharges = 0
   private status: GameStatus = 'playing'
 
+  // Boss shield: a regenerating buffer in front of Boss HP. `movesSinceBossHit` drives regen; it
+  // resets whenever the Boss takes damage in an action, and once it passes the delay the shield
+  // regrows a little each move — so neglecting the Boss lets it heal back up.
+  private bossShield: number
+  private readonly bossShieldMax: number
+  private movesSinceBossHit = 0
+  private bossHitThisAction = false
+
   private moves = 0
   private detonations = 0
   private cracks = 0
@@ -60,6 +68,8 @@ class Engine implements MinesweeperEngine {
     this.targetSeconds = opts.targetSeconds
     this.board = generateBoard(this.cfg, opts.seed)
     this.playerCharge = this.cfg.startingCharge
+    this.bossShieldMax = this.cfg.bossShield
+    this.bossShield = this.cfg.bossShield
   }
 
   /** Deep, independent copy for hypothetical play (see the interface). Shares the immutable config
@@ -89,6 +99,7 @@ class Engine implements MinesweeperEngine {
     if (tile.state === 'cleared' || tile.state === 'armed' || tile.state === 'detonated') return []
 
     this.moves++
+    this.bossHitThisAction = false
     const events: GameEvent[] = []
 
     if (tile.isMine) {
@@ -108,6 +119,7 @@ class Engine implements MinesweeperEngine {
 
     this.moves++
     this.detonations++
+    this.bossHitThisAction = false
     const events: GameEvent[] = []
     let chainCleared = 0
 
@@ -143,9 +155,7 @@ class Engine implements MinesweeperEngine {
         if (t.state === 'covered') this.armMine(t, 'blast', events)
         else if (t.state === 'armed') this.chargeMine(t, stack, events)
       } else if (t.tier === 'boss') {
-        t.hp -= stack
-        if (t.hp <= 0) this.destroyGroundTile(t, events)
-        else this.damageTile(t, events)
+        this.damageBoss(t, stack, events)
       }
     }
 
@@ -228,6 +238,8 @@ class Engine implements MinesweeperEngine {
       status: this.status,
       bossHp: this.bossHp(),
       bossMaxHp: this.cfg.bossHp,
+      bossShield: this.bossShield,
+      bossShieldMax: this.bossShieldMax,
       hookCharges: this.hookCharges,
       stackCap: this.cfg.stackCap,
       blastRadiusCap: this.cfg.blastRadiusCap,
@@ -240,6 +252,45 @@ class Engine implements MinesweeperEngine {
   private bossHp(): number {
     const b = this.board.tiles.find(t => t.tier === 'boss')
     return b ? Math.max(0, b.hp) : 0
+  }
+
+  /** Deal `amount` to the Boss: the shield soaks it first, only the overflow reaches HP. Marks the
+   *  Boss as hit this action (so its regen counter resets). */
+  private damageBoss(bossTile: Tile, amount: number, events: GameEvent[]): void {
+    this.bossHitThisAction = true
+    let dmg = amount
+    if (this.bossShield > 0) {
+      const absorbed = Math.min(this.bossShield, dmg)
+      const from = this.bossShield
+      this.bossShield -= absorbed
+      dmg -= absorbed
+      events.push({ kind: 'bossShieldChanged', from, to: this.bossShield })
+    }
+    if (dmg > 0) {
+      bossTile.hp -= dmg
+      if (bossTile.hp <= 0) this.destroyGroundTile(bossTile, events)
+      else this.damageTile(bossTile, events)
+    }
+  }
+
+  /** Run once per real player action (from checkEnd). If the Boss took no damage this action, tick
+   *  the neglect counter; once it passes the delay the shield regrows a little each move (capped),
+   *  so you can't clear the whole board in peace and then one-shot a fresh Boss. */
+  private advanceBossRegen(events: GameEvent[]): void {
+    if (this.bossHitThisAction) {
+      this.movesSinceBossHit = 0
+      return
+    }
+    this.movesSinceBossHit++
+    if (
+      this.movesSinceBossHit > this.cfg.bossRegenDelayMoves &&
+      this.bossShield < this.bossShieldMax &&
+      this.bossHp() > 0
+    ) {
+      const from = this.bossShield
+      this.bossShield = Math.min(this.bossShieldMax, this.bossShield + this.cfg.bossShieldRegenPerMove)
+      events.push({ kind: 'bossShieldChanged', from, to: this.bossShield })
+    }
   }
 
   result(): GameResult | null {
@@ -315,6 +366,7 @@ class Engine implements MinesweeperEngine {
     if (!dest || dest.tier === 'boss' || (dest.isMine && dest.state !== 'detonated')) return []
 
     const events: GameEvent[] = []
+    this.bossHitThisAction = false
     this.hookCharges -= 1
     this.moveMine(mine, dest, events)
     events.push({ kind: 'hookUsed', from: { x: coord.x, y: coord.y }, to: { x: dest.x, y: dest.y }, charges: this.hookCharges })
@@ -426,11 +478,16 @@ class Engine implements MinesweeperEngine {
     for (const t of this.board.tiles) if (t.isMine && t.state !== 'detonated') mines++
     const cap = this.cfg.stackCap
     const maxDeliverable = mines <= cap ? (mines * (mines + 1)) / 2 : (cap * (cap + 1)) / 2 + (mines - cap) * cap
-    return maxDeliverable >= hp
+    // Must punch through the current shield AND the HP behind it. (Uses the shield as it stands now —
+    // striking immediately — rather than its regenerated max, so we never false-declare a loss.)
+    return maxDeliverable >= hp + this.bossShield
   }
 
   private checkEnd(events: GameEvent[]): void {
     if (this.status !== 'playing') return
+    // Once per action: regrow the Boss shield if it's been left alone (before the killable check,
+    // so a shield that just healed is accounted for).
+    this.advanceBossRegen(events)
     // Loss first: the mine pool can no longer finish the Boss — bad allocation doomed the run.
     if (!this.bossStillKillable()) {
       this.endGame('lost', events)

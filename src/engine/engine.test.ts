@@ -246,9 +246,12 @@ describe('detonation', () => {
         cur = { x: cur.x + Math.sign(dir.x), y: cur.y + Math.sign(dir.y) }
       }
       if (Math.max(Math.abs(cur.x - bx), Math.abs(cur.y - by)) !== 2) continue // couldn't park it at 2
-      const before = engine.snapshot().bossHp
+      // The hit now lands on the Boss's shield first, so measure effective health (shield + HP): a
+      // radius-1 blast one tile short still delivers its stack (1) to the Boss.
+      const eff = () => { const s = engine.snapshot(); return s.bossShield + s.bossHp }
+      const before = eff()
       engine.detonate(cur)
-      expect(engine.snapshot().bossHp).toBe(before - 1) // radius-1 blast one tile short still chips it
+      expect(eff()).toBe(before - 1)
       return
     }
     throw new Error('no hookable mine reached Chebyshev 2')
@@ -283,6 +286,65 @@ describe('detonation', () => {
       return
     }
     throw new Error('no two-apart mine pair found')
+  })
+})
+
+describe('boss shield', () => {
+  const bx = Math.floor(cfg.width / 2)
+  const by = Math.floor(cfg.height / 2)
+  const chb = (x: number, y: number) => Math.max(Math.abs(x - bx), Math.abs(y - by))
+
+  it('starts full and is exposed in the snapshot', () => {
+    const s = createEngine({ difficulty: DIFF, seed: 'shield-init' }).snapshot()
+    expect(s.bossShield).toBe(cfg.bossShield)
+    expect(s.bossShieldMax).toBe(cfg.bossShield)
+    expect(cfg.bossShield).toBeGreaterThan(0)
+  })
+
+  /** Park an armed mine at Chebyshev 2 of the Boss (via hooks) so a detonation reaches it. Returns
+   *  the engine and the mine's parked coord, or null if this seed didn't cooperate. */
+  function parkedAtBoss(seed: string): { engine: ReturnType<typeof createEngine>; at: Coord } | null {
+    const board = truth(seed)
+    const mine = [...board.tiles].filter(t => t.isMine).sort((a, b) => chb(a.x, a.y) - chb(b.x, b.y))[0]
+    if (!mine) return null
+    const engine = createEngine({ difficulty: DIFF, seed })
+    for (const h of board.tiles.filter(t => t.isHook).slice(0, 10)) engine.reveal({ x: h.x, y: h.y })
+    if (engine.snapshot().hookCharges < 6) return null
+    engine.reveal({ x: mine.x, y: mine.y })
+    let cur = { x: mine.x, y: mine.y }
+    for (let k = 0; k < 12 && chb(cur.x, cur.y) > 2; k++) {
+      const dir = { x: Math.sign(bx - cur.x), y: Math.sign(by - cur.y) }
+      if (!engine.useHook(cur, dir).some(e => e.kind === 'hookUsed')) break
+      cur = { x: cur.x + Math.sign(dir.x), y: cur.y + Math.sign(dir.y) }
+    }
+    return chb(cur.x, cur.y) === 2 ? { engine, at: cur } : null
+  }
+
+  it('soaks a hit on the shield before HP, and regrows it when the Boss is left alone', () => {
+    for (let i = 0; i < 200; i++) {
+      const parked = parkedAtBoss(`shield-${i}`)
+      if (!parked) continue
+      const { engine, at } = parked
+      const hp0 = engine.snapshot().bossHp
+      const sh0 = engine.snapshot().bossShield
+      engine.detonate(at) // a stack-1 hit: absorbed by the shield, HP untouched
+      expect(engine.snapshot().bossShield).toBe(sh0 - 1)
+      expect(engine.snapshot().bossHp).toBe(hp0) // shield took it — HP is safe behind it
+
+      // Now neglect the Boss: reveal covered GROUND tiles far from it. Past the delay the shield
+      // regrows. Do delay+regen-back-to-full worth of no-Boss-damage moves.
+      const far = truth(`shield-${i}`).tiles.filter(t => !t.isMine && t.tier !== 'boss' && chb(t.x, t.y) > 3)
+      const shieldLow = engine.snapshot().bossShield
+      let regrew = false
+      for (const t of far.slice(0, cfg.bossRegenDelayMoves + 4)) {
+        engine.reveal({ x: t.x, y: t.y })
+        if (engine.snapshot().bossShield > shieldLow) { regrew = true; break }
+      }
+      expect(regrew).toBe(true) // neglect let the shield heal back up
+      expect(engine.snapshot().bossShield).toBeLessThanOrEqual(cfg.bossShield) // never past its max
+      return
+    }
+    throw new Error('no seed parked a mine at the Boss for the shield test')
   })
 })
 
