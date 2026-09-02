@@ -8,11 +8,8 @@
  */
 
 export interface FxOptions {
-  reduceMotion: boolean
   /** Reads the current CSS pixel size of a board cell + gap, so FX line up with tiles. */
   cellMetrics: () => { size: number; gap: number; originX: number; originY: number }
-  /** Sets the board container shake offset (px). */
-  setShake: (x: number, y: number) => void
 }
 
 interface Particle {
@@ -52,7 +49,6 @@ export class FxLayer {
   private particles: Particle[] = []
   private shocks: Shockwave[] = []
   private tracers: Tracer[] = []
-  private shakeAmp = 0
   private raf = 0
   private running = false
   private lastT = 0
@@ -83,30 +79,30 @@ export class FxLayer {
     }
   }
 
-  /** A mine going off: shockwave ring, debris burst, and a screen kick scaled by damage. */
+  /** A mine going off: a soft expanding ring and a small, brief debris puff scaled by damage.
+   *  No screen shake — this is a fast game and a kick every detonation would be obnoxious. Kept
+   *  deliberately subtle: the effect should read at a glance, not dominate the board. */
   detonation(x: number, y: number, intensity: number): void {
-    if (this.opts.reduceMotion) return
     const { cx, cy } = this.cellCenter(x, y)
     const { size } = this.opts.cellMetrics()
-    // `intensity` is the mine's charge (1..maxMineCharge): a chip pops small, a charged mine roars.
+    // `intensity` is the mine's charge: a chip puffs small, a charged mine a touch bigger.
     const damage = 3 + intensity * 1.6
-    this.shocks.push({ x: cx, y: cy, radius: size * 0.3, maxRadius: size * (2 + damage * 0.4), life: 1 })
-    const n = Math.min(48, 14 + damage * 4)
+    this.shocks.push({ x: cx, y: cy, radius: size * 0.3, maxRadius: size * (1.1 + damage * 0.2), life: 1 })
+    const n = Math.min(16, 6 + damage) // a small puff, not a debris storm
     for (let i = 0; i < n; i++) {
       const a = (Math.PI * 2 * i) / n + Math.random() * 0.4
-      const speed = 60 + Math.random() * 140 * (1 + damage * 0.15)
+      const speed = 35 + Math.random() * 60 * (1 + damage * 0.08)
       this.particles.push({
         x: cx,
         y: cy,
         vx: Math.cos(a) * speed,
         vy: Math.sin(a) * speed,
         life: 1,
-        maxLife: 0.5 + Math.random() * 0.5,
+        maxLife: 0.32 + Math.random() * 0.28,
         color: Math.random() < 0.5 ? '#35e0ff' : '#eaffff',
-        size: 1.5 + Math.random() * 2.5,
+        size: 1 + Math.random() * 1.6,
       })
     }
-    this.shakeAmp = Math.min(9, 3 + damage * 0.8)
     this.ensureRunning()
   }
 
@@ -114,23 +110,23 @@ export class FxLayer {
    *  is a small cyan spark, but a scaled boost from a fat detonator (+2, +3) erupts brighter, faster,
    *  and with a little ring — so a super-charge visibly reads bigger than an ordinary overlap. */
   chargeSpark(x: number, y: number, magnitude = 1): void {
-    if (this.opts.reduceMotion) return
     const { cx, cy } = this.cellCenter(x, y)
     const big = magnitude >= 2
-    const n = big ? 8 + magnitude * 6 : 6
-    const speed = big ? 60 + magnitude * 25 : 40
-    const color = big ? '#c6f9ff' : '#35e0ff' // brighter white-cyan for a super-charge
+    const n = big ? 4 + magnitude * 2 : 3
+    const speed = big ? 34 + magnitude * 10 : 26
+    const color = big ? '#bff3ff' : '#35e0ff' // brighter white-cyan for a super-charge
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2
       this.particles.push({
         x: cx, y: cy,
-        vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - 20,
-        life: 1, maxLife: big ? 0.5 : 0.4, color, size: big ? 2.4 : 1.5,
+        vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - 14,
+        life: 1, maxLife: big ? 0.4 : 0.32, color, size: big ? 1.7 : 1.2,
       })
     }
     if (big) {
+      // a faint ring only on a real super-charge, so a big boost still reads bigger than a +1
       const { size } = this.opts.cellMetrics()
-      this.shocks.push({ x: cx, y: cy, radius: size * 0.2, maxRadius: size * (0.7 + magnitude * 0.25), life: 1 })
+      this.shocks.push({ x: cx, y: cy, radius: size * 0.2, maxRadius: size * (0.45 + magnitude * 0.14), life: 1 })
     }
     this.ensureRunning()
   }
@@ -138,7 +134,6 @@ export class FxLayer {
   /** Shrapnel: a bright amber bolt flies from the blast (`fx`,`fy`) to an enemy just outside its
    *  radius (`tx`,`ty`) and bursts on arrival — the visible "the blast reached past its edge". */
   shrapnel(fx: number, fy: number, tx: number, ty: number): void {
-    if (this.opts.reduceMotion) return
     const from = this.cellCenter(fx, fy)
     const to = this.cellCenter(tx, ty)
     this.tracers.push({ x0: from.cx, y0: from.cy, x1: to.cx, y1: to.cy, t: 0, speed: 5.5, burst: false })
@@ -147,14 +142,14 @@ export class FxLayer {
 
   /** The little amber puff where a shrapnel bolt lands. */
   private shrapnelImpact(cx: number, cy: number): void {
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 5; i++) {
       const a = Math.random() * Math.PI * 2
-      const s = 50 + Math.random() * 90
+      const s = 30 + Math.random() * 45
       this.particles.push({
         x: cx, y: cy,
         vx: Math.cos(a) * s, vy: Math.sin(a) * s,
-        life: 1, maxLife: 0.35 + Math.random() * 0.3,
-        color: Math.random() < 0.5 ? '#ffab3d' : '#ffe3a6', size: 1.4 + Math.random() * 1.8,
+        life: 1, maxLife: 0.26 + Math.random() * 0.2,
+        color: Math.random() < 0.5 ? '#ffab3d' : '#ffe3a6', size: 1.1 + Math.random() * 1.2,
       })
     }
   }
@@ -168,11 +163,10 @@ export class FxLayer {
       this.lastT = t
       this.update(dt)
       this.draw()
-      if (this.particles.length || this.shocks.length || this.tracers.length || this.shakeAmp > 0.1) {
+      if (this.particles.length || this.shocks.length || this.tracers.length) {
         this.raf = requestAnimationFrame(step)
       } else {
         this.running = false
-        this.opts.setShake(0, 0)
         this.clear()
       }
     }
@@ -202,13 +196,6 @@ export class FxLayer {
       }
     }
     this.tracers = this.tracers.filter(tr => tr.t < 1)
-
-    if (this.shakeAmp > 0.1) {
-      this.shakeAmp *= Math.pow(0.001, dt) // fast decay
-      this.opts.setShake((Math.random() * 2 - 1) * this.shakeAmp, (Math.random() * 2 - 1) * this.shakeAmp)
-    } else {
-      this.shakeAmp = 0
-    }
   }
 
   private draw(): void {
@@ -217,8 +204,8 @@ export class FxLayer {
     for (const s of this.shocks) {
       ctx.beginPath()
       ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2)
-      ctx.strokeStyle = `rgba(53, 224, 255, ${Math.max(0, s.life) * 0.6})`
-      ctx.lineWidth = 2.5 * Math.max(0.2, s.life)
+      ctx.strokeStyle = `rgba(53, 224, 255, ${Math.max(0, s.life) * 0.38})`
+      ctx.lineWidth = 1.6 * Math.max(0.2, s.life)
       ctx.stroke()
     }
     for (const tr of this.tracers) {

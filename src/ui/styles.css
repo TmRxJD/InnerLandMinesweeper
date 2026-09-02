@@ -47,8 +47,6 @@
 * { box-sizing: border-box; }
 
 .ilm-root {
-  --shake-x: 0px;
-  --shake-y: 0px;
   position: relative;
   display: flex;
   width: 100%;
@@ -303,7 +301,6 @@
 
 .ilm-stage {
   position: relative;
-  transform: translate(var(--shake-x), var(--shake-y));
 }
 
 .ilm-board {
@@ -489,9 +486,6 @@
 .ilm-tile.blast-hit { animation: ilm-blast-hit 500ms ease-out; }
 .ilm-tile.blast-origin { animation: ilm-blast-origin 500ms ease-out; z-index: 7; }
 .ilm-tile.shrapnel-hit { animation: ilm-shrapnel-hit 500ms ease-out; z-index: 6; }
-.reduce-motion .ilm-tile.blast-hit,
-.reduce-motion .ilm-tile.blast-origin,
-.reduce-motion .ilm-tile.shrapnel-hit { animation: none; }
 
 /* Charge-up: a quick pop + coloured glow when a mine's charge increases. */
 @keyframes ilm-charge-up {
@@ -500,7 +494,6 @@
   100% { transform: scale(1); }
 }
 .ilm-tile.charge-up .ilm-orb { animation: ilm-charge-up 420ms ease-out; }
-.reduce-motion .ilm-tile.charge-up .ilm-orb { animation: none; }
 
 /* Enemy health bar — shown once an enemy is damaged (cracked), so you can see how much
    fight is left in it, the boss especially. Remaining health = 1 - crack; colour shifts

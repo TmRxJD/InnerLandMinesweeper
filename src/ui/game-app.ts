@@ -150,12 +150,7 @@ export class GameApp {
 
     this.wireControls()
     this.fx = new FxLayer(this.fxCanvas, {
-      reduceMotion: this.reduceMotion,
       cellMetrics: () => this.cellMetrics(),
-      setShake: (x, y) => {
-        this.stage.style.setProperty('--shake-x', `${x}px`)
-        this.stage.style.setProperty('--shake-y', `${y}px`)
-      },
     })
 
     document.addEventListener('visibilitychange', this.onVisibility)
