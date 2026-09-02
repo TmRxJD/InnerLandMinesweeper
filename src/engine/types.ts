@@ -215,7 +215,9 @@ export interface MinesweeperEngine {
    *  the 8 directions; each of dir.x/dir.y is used as its sign, −1..1). It crushes a 1-HP enemy
    *  in the way; no-op (empty list) with no charge, no armed mine there, a zero direction, or a
    *  target that is another mine, the Boss, or off-grid. */
-  useHook(coord: Coord, dir: Coord): EventList
+  /** Pull the armed mine at `coord` one step straight toward the Boss (direction is automatic — the
+   *  `dir` argument is ignored, kept only for call-site compatibility). */
+  useHook(coord: Coord, dir?: Coord): EventList
   /** Advance the timer; the harness calls this explicitly, the UI on a rAF/interval tick. */
   tick(deltaSeconds: number): EventList
   snapshot(): BoardSnapshot

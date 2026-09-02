@@ -180,27 +180,26 @@ describe('detonation', () => {
   })
 
   it('an armed mine caught in a blast gains a stack (overlap charging)', () => {
-    // Mines never spawn touching now — adjacency is created by a Magnetic Hook. Find two mines
-    // exactly two cells apart along a straight/diagonal line with one empty cell between them, hook
-    // one onto that middle cell so the two sit adjacent, then detonate it and assert the other
-    // charged. This is precisely how overlap charging is set up in real play.
+    // Mines never spawn touching — adjacency is created by a Magnetic Hook, which pulls a mine one
+    // step STRAIGHT TOWARD THE BOSS. So find two mines collinear with the Boss, two boss-ward steps
+    // apart (a → mid → b, each a step toward centre), hook `a` inward onto `mid` so it sits adjacent
+    // to `b`, then detonate it and assert `b` charged. This is exactly how overlap is set up in play.
+    const bx = (cfg.width - 1) >> 1
+    const by = (cfg.height - 1) >> 1
     for (let i = 0; i < 800; i++) {
       const seed = `ov-${i}`
       const board = truth(seed)
       let pair: { a: { x: number; y: number }; b: { x: number; y: number }; mid: { x: number; y: number } } | null = null
-      const armedMinesList = board.tiles.filter(t => t.isMine)
-      for (const a of armedMinesList) {
-        for (const b of armedMinesList) {
-          if (b === a) continue
-          const dx = b.x - a.x
-          const dy = b.y - a.y
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== 2 || dx % 2 !== 0 || dy % 2 !== 0) continue
-          const mid = tileAt(board, a.x + dx / 2, a.y + dy / 2)
-          if (!mid || mid.isMine || mid.tier === 'boss') continue
-          pair = { a, b, mid }
-          break
-        }
-        if (pair) break
+      for (const a of board.tiles.filter(t => t.isMine)) {
+        const mx = a.x + Math.sign(bx - a.x)
+        const my = a.y + Math.sign(by - a.y)
+        if (mx === a.x && my === a.y) continue
+        const mid = tileAt(board, mx, my)
+        if (!mid || mid.isMine || mid.tier === 'boss') continue // `a` must land on empty ground
+        const b = tileAt(board, mx + Math.sign(bx - mx), my + Math.sign(by - my)) // next boss-ward cell
+        if (!b || !b.isMine || b.tier === 'boss') continue
+        pair = { a, b, mid }
+        break
       }
       if (!pair) continue
       const hook = board.tiles.find(t => t.isHook)
@@ -210,15 +209,17 @@ describe('detonation', () => {
       if (engine.snapshot().hookCharges < 1) continue
       engine.reveal({ x: pair.a.x, y: pair.a.y }) // arm a
       engine.reveal({ x: pair.b.x, y: pair.b.y }) // arm b
-      // Pull a onto the middle cell → now adjacent to b.
-      engine.useHook({ x: pair.a.x, y: pair.a.y }, { x: Math.sign(pair.b.x - pair.a.x), y: Math.sign(pair.b.y - pair.a.y) })
+      // The hook pulls `a` one step toward the Boss → onto `mid`, now adjacent to `b`.
+      engine.useHook({ x: pair.a.x, y: pair.a.y })
+      const av = engine.snapshot().tiles.find(t => t.coord.x === pair!.mid.x && t.coord.y === pair!.mid.y)!
+      if (av.state !== 'armed') continue // hook was blocked on this seed — try another
       const events = engine.detonate({ x: pair.mid.x, y: pair.mid.y })
       expect(events.some(e => e.kind === 'mineChargeChanged')).toBe(true)
       const bv = engine.snapshot().tiles.find(t => t.coord.x === pair!.b.x && t.coord.y === pair!.b.y)!
       expect(bv.mineCharge).toBe(2)
       return
     }
-    throw new Error('no two-apart mine pair found')
+    throw new Error('no boss-collinear mine pair found')
   })
 
   it('damages the Boss one ring BEYOND the blast — a hooked-in mine two tiles out chips it', () => {

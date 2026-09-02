@@ -358,19 +358,26 @@ class Engine implements MinesweeperEngine {
     events.push({ kind: 'hookCharged', coord: { x: tile.x, y: tile.y }, to: this.hookCharges })
   }
 
-  /** Spend a hook charge to move the armed mine at `coord` one tile in direction `dir` (any of
-   *  the 8 directions; dir.x/dir.y taken as signs). It crushes a 1-HP enemy in the way; never
-   *  onto another mine, the Boss, or off-grid. Adjacent numbers stay honest at both cells. */
-  useHook(coord: Coord, dir: Coord): EventList {
+  /** Spend a hook charge to pull the armed mine at `coord` one tile STRAIGHT TOWARD THE BOSS. The
+   *  direction is NOT the caller's to choose — a hook only ever draws a mine inward, crushing whatever
+   *  1-HP enemy is in that cell (it moves THROUGH the field, not around it). The `dir` argument is
+   *  ignored; it survives only so existing callers/UI don't need reshaping. Blocked solely by another
+   *  live mine (can't stack) or the Boss's own tile (can't shove a mine onto it); a detonated crater is
+   *  fine ground to land on. Adjacent numbers stay honest at both cells. */
+  useHook(coord: Coord, _dir?: Coord): EventList {
     if (this.status !== 'playing' || this.hookCharges < 1) return []
     const mine = tileAt(this.board, coord.x, coord.y)
     if (!mine || !mine.isMine || mine.state !== 'armed') return []
-    const dx = Math.sign(dir.x)
-    const dy = Math.sign(dir.y)
-    if (dx === 0 && dy === 0) return [] // no direction
+    // One step straight at the Boss (board centre). Sign of the offset on each axis → the 8-way step
+    // that reduces Chebyshev distance; no sideways drift, no player control.
+    const bx = (this.board.width - 1) >> 1
+    const by = (this.board.height - 1) >> 1
+    const dx = Math.sign(bx - mine.x)
+    const dy = Math.sign(by - mine.y)
+    if (dx === 0 && dy === 0) return [] // already at the centre (unreachable: the Boss occupies it)
     const dest = tileAt(this.board, mine.x + dx, mine.y + dy)
-    // Valid target: on-grid, not the Boss, and not a LIVE mine. A detonated crater keeps isMine
-    // set but is empty ground, so it's a fine landing spot; only armed/covered mines are blocked.
+    // On-grid always (the Boss is interior). Blocked only by the Boss tile or another live mine; any
+    // covered/cracked enemy in the way is crushed by moveMine (the pull goes through it).
     if (!dest || dest.tier === 'boss' || (dest.isMine && dest.state !== 'detonated')) return []
 
     const events: GameEvent[] = []

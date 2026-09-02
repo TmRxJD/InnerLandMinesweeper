@@ -54,44 +54,34 @@ function bestBy(mines: TileView[], score: (m: TileView) => number): TileView | n
   return best
 }
 
-/** One hook step pulling `mine` toward the Boss, but ONLY into a cell we KNOW is empty — cleared or
- *  cracked ground, or a detonated crater. Never a covered tile (it might hide a mine, which the engine
- *  refuses to move onto → a no-op hook that would stall the bot forever), never the Boss, never a live
- *  mine. Requiring known-empty destinations makes every returned hook real progress, so gathering
- *  terminates instead of spinning. Null when no safe approaching step exists. */
-function stepToBoss(mine: TileView, boss: Coord, snap: BoardSnapshot): Coord | null {
-  const cur = cheb(mine.coord, boss)
-  const sx = Math.sign(boss.x - mine.coord.x)
-  const sy = Math.sign(boss.y - mine.coord.y)
-  const cands: Coord[] = []
-  if (sx && sy) cands.push({ x: sx, y: sy })
-  if (sx) cands.push({ x: sx, y: 0 })
-  if (sy) cands.push({ x: 0, y: sy })
-  if (sx) cands.push({ x: sx, y: 1 }, { x: sx, y: -1 }) // sideways slides around an obstacle
-  if (sy) cands.push({ x: 1, y: sy }, { x: -1, y: sy })
-  for (const d of cands) {
-    if (!d.x && !d.y) continue
-    const nx = mine.coord.x + d.x
-    const ny = mine.coord.y + d.y
-    if (Math.max(Math.abs(boss.x - nx), Math.abs(boss.y - ny)) >= cur) continue // must get closer
-    const t = snap.tiles[ny * snap.width + nx]
-    if (!t || t.tier === 'boss') continue
-    if (t.state !== 'cleared' && t.state !== 'cracked' && t.state !== 'detonated') continue // known-empty only
-    return d
-  }
-  return null
+/** Whether a hook on `mine` would actually advance it. The engine now pulls a hooked mine one step
+ *  STRAIGHT at the Boss on its own — the bot only decides WHICH mine. So this just checks that step is
+ *  worth spending a hook on: the cell straight toward the Boss must be passable (cleared/cracked/
+ *  detonated ground — a cracked enemy there is crushed). We refuse when it's still COVERED (it could
+ *  hide a mine, which blocks → a wasted no-op) or is a known live mine / the Boss. In effect the bot
+ *  hooks a mine only once its lane into the centre is open. */
+function canHookTowardBoss(mine: TileView, boss: Coord, snap: BoardSnapshot): boolean {
+  const dx = Math.sign(boss.x - mine.coord.x)
+  const dy = Math.sign(boss.y - mine.coord.y)
+  if (!dx && !dy) return false
+  const t = snap.tiles[(mine.coord.y + dy) * snap.width + (mine.coord.x + dx)]
+  if (!t || t.tier === 'boss') return false
+  // Passable = anything but a known live mine. Covered ground is crushed on the way in (the hook goes
+  // THROUGH enemies); the only true block is another armed mine. (A covered tile could hide a mine and
+  // no-op, but that is rare and the caller tries the next mine rather than spinning on this one.)
+  return t.state !== 'armed'
 }
-/** Hook the nearest squad mine that can't yet strike the Boss one step closer (into known-empty
- *  ground). Mines already in strike range are left alone, so this drains to nothing rather than
- *  looping — and if no mine has a safe step, it returns null so the bot clears a path first. */
+/** Hook the nearest squad mine that can't yet strike the Boss. Direction is the engine's (straight
+ *  in); the bot only picks which mine, and only one whose lane is open (canHookTowardBoss), so the
+ *  hook always advances instead of no-opping. Mines already in strike range are left alone, so this
+ *  drains to nothing rather than looping. */
 function gatherMove(squad: TileView[], boss: Coord, snap: BoardSnapshot): AutoAction | null {
   if (snap.hookCharges < 1) return null
   const outOfRange = squad
     .filter(m => cheb(m.coord, boss) > blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1)
     .sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss))
   for (const m of outOfRange) {
-    const dir = stepToBoss(m, boss, snap)
-    if (dir) return { type: 'hook', coord: m.coord, dir }
+    if (canHookTowardBoss(m, boss, snap)) return { type: 'hook', coord: m.coord }
   }
   return null
 }
