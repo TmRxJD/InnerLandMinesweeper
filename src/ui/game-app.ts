@@ -13,7 +13,7 @@ import { createEngine } from '../engine/engine'
 import { DIFFICULTIES } from '../engine/tuning'
 import { randomSeed } from '../engine/rng'
 import { chooseAction } from '../engine/mcts'
-import type { AutoAction } from '../engine/auto-player'
+import { autoPlay, type AutoAction } from '../engine/auto-player'
 import { Rng } from '../engine/rng'
 import type { BoardSnapshot, Coord, Difficulty, EventList, GameResult, MinesweeperEngine, Tier, TileView } from '../engine/types'
 import { FxLayer } from './fx-layer'
@@ -1022,8 +1022,35 @@ export class GameApp {
     this.demoStuck = 0
     this.root.classList.add('is-demo')
     this.root.querySelector('[data-demo]')!.textContent = 'Stop'
-    if (this.engine.snapshot().status !== 'playing') this.newGame(this.difficulty, randomSeed())
+    // Autoplay is a showcase: start it on a CLEARABLE board so it demonstrates the full
+    // clear→build→gather→deliver campaign, never an unwinnable-by-design seed where even perfect play
+    // loses (the game is deliberately tight — not every random board is beatable). A fresh real game
+    // still gets a plain randomSeed().
+    if (this.engine.snapshot().status !== 'playing') this.newGame(this.difficulty, this.demoSeed())
     this.demoStep()
+  }
+
+  /** Pick a seed the reference player can actually CLEAR, for the Autoplay showcase only. Cheap: run
+   *  the fast heuristic to completion (untimed) on a throwaway engine for a few candidates and take the
+   *  first win — a board the heuristic clears, the stronger MCTS demo clears too. Falls back to the
+   *  last candidate if none win inside the budget, so it always returns promptly. */
+  private demoSeed(maxTries = 12): string {
+    let last = randomSeed()
+    for (let i = 0; i < maxTries; i++) {
+      const seed = randomSeed()
+      last = seed
+      const sim = createEngine({ difficulty: this.difficulty, seed, revealHooks: REVEAL_HOOKS })
+      for (let m = 0; m < 400 && sim.snapshot().status === 'playing'; m++) {
+        const a = autoPlay(sim.snapshot())
+        if (!a) break
+        if (a.type === 'reveal') sim.reveal(a.coord)
+        else if (a.type === 'hook') sim.useHook(a.coord, a.dir ?? { x: 0, y: 0 })
+        else sim.detonate(a.coord)
+        sim.tick(0.45)
+      }
+      if (sim.snapshot().status === 'won') return seed
+    }
+    return last
   }
 
   private stopDemo(): void {
@@ -1056,7 +1083,7 @@ export class GameApp {
     this.demoTimers.push(
       globalThis.setTimeout(() => {
         if (!this.demo) return
-        this.newGame(this.difficulty, randomSeed())
+        this.newGame(this.difficulty, this.demoSeed()) // showcase: next board is a clearable one too
         this.demoStep()
       }, delay),
     )
