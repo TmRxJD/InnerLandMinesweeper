@@ -316,6 +316,14 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
     const pick = pickReveal(tappable, snap)
     if (pick) return { type: 'reveal', coord: pick.coord }
   }
+  // Broke AND nothing armed, with ground left: fish for a free mine-arm (uncovering a mine costs no
+  // charge). Without an auto-arming cascade this is common — the pool and the charge both run dry — so
+  // this is what keeps the run progressing to a real win/loss instead of freezing. Rotate the pick by
+  // move count so a dud ground tile (a no-op at 0 charge) isn't re-tapped forever.
+  if (tappable.length > 0) {
+    const ranked = [...tappable].sort((a, b) => clearedNeighbourCount(b, snap) - clearedNeighbourCount(a, snap))
+    return { type: 'reveal', coord: ranked[snap.moves % Math.min(ranked.length, 16)]!.coord }
+  }
   return null
 }
 
@@ -440,6 +448,15 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
   if (haveCovered && snap.playerCharge >= 1) {
     const r = revealForAmmo(snap, boss)
     if (r) return { type: 'reveal', coord: r }
+  }
+
+  // 3b. Broke with ground left: refuel by detonating a mine — its charge refund funds the taps that
+  //     finish the last tiles no blast can reach (without auto-arm those stragglers are common, and a
+  //     dead-broke bot stalls on them). Spare the Boss squad while it lives; prefer the fattest mine.
+  if (haveCovered && snap.playerCharge < 2) {
+    const fuel = bossAlive ? mines.filter(m => !squadKeys.has(m.coord.y * snap.width + m.coord.x)) : mines
+    const refuel = bestBy(fuel, m => m.mineCharge ?? 1)
+    if (refuel) return { type: 'detonate', coord: refuel.coord }
   }
 
   // 4. Never stall: take a weaker chain, then a free deduced/fished mine.

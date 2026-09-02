@@ -153,8 +153,12 @@ class Engine implements MinesweeperEngine {
     //     then become a way to build tighter, bigger chains for a better score, not a requirement.
     for (const t of withinRadius(this.board, tile.x, tile.y, radius + 1)) {
       if (t.isMine) {
-        if (t.state === 'covered') this.armMine(t, 'blast', events)
-        else if (t.state === 'armed') this.chargeMine(t, stack, events)
+        // A blast pumps a neighbouring ARMED mine's stack (deliberate stack-building), but NEVER arms a
+        // covered mine. Every mine you set off is a deliberate detonation — there is no automatic
+        // cascade through the field. A "chain" is the player's chosen SEQUENCE of detonations; covered
+        // mines just sit until you uncover them yourself. A covered mine also isn't destroyed by the
+        // blast — it survives to be uncovered and used.
+        if (t.state === 'armed') this.chargeMine(t, stack, events)
       } else if (t.tier === 'boss') {
         this.damageBoss(t, stack, events)
       }
