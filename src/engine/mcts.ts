@@ -74,16 +74,29 @@ function candidateActions(snap: BoardSnapshot, revealSamples: number, rng: () =>
   for (const m of armed) out.push({ type: 'detonate', coord: m.coord })
 
   // Hook the handful of mines nearest the Boss toward it (delivery across the moat) and toward each
-  // other (to cluster for the chain). Capped to the closest few so the branching stays searchable.
+  // other (to cluster for the chain). CRITICAL: only offer a hook whose destination is KNOWN-EMPTY
+  // (cleared/cracked ground or a detonated crater). A hook into the Boss, a live mine, or off-grid is
+  // a no-op — and because the search is deterministic, a no-op action would be re-picked forever
+  // (the ~1000× "hook into an armed mine" spin). Requiring known-empty destinations means the search
+  // clears a lane first, then routes mines down it.
+  const w0 = snap.width
+  const emptyDest = (m: TileView, dir: { x: number; y: number }): boolean => {
+    if (!dir.x && !dir.y) return false
+    const nx = m.coord.x + dir.x
+    const ny = m.coord.y + dir.y
+    const t = snap.tiles[ny * w0 + nx]
+    if (!t || t.tier === 'boss') return false
+    return t.state === 'cleared' || t.state === 'cracked' || t.state === 'detonated'
+  }
   if (snap.hookCharges >= 1 && armed.length > 0) {
     const nearest6 = [...armed].sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, 6)
     for (const m of nearest6) {
       const toBoss = { x: Math.sign(boss.x - m.coord.x), y: Math.sign(boss.y - m.coord.y) }
-      if (toBoss.x || toBoss.y) out.push({ type: 'hook', coord: m.coord, dir: toBoss })
+      if (emptyDest(m, toBoss)) out.push({ type: 'hook', coord: m.coord, dir: toBoss })
       const mate = nearest(m, nearest6)
       if (mate) {
         const toMate = { x: Math.sign(mate.coord.x - m.coord.x), y: Math.sign(mate.coord.y - m.coord.y) }
-        if ((toMate.x || toMate.y) && (toMate.x !== toBoss.x || toMate.y !== toBoss.y)) {
+        if ((toMate.x !== toBoss.x || toMate.y !== toBoss.y) && emptyDest(m, toMate)) {
           out.push({ type: 'hook', coord: m.coord, dir: toMate })
         }
       }
