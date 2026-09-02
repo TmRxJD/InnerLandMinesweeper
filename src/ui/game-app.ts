@@ -1045,7 +1045,7 @@ export class GameApp {
    *  fast heuristic (untimed) on a few candidates and take the first that WINS INSIDE THE BUDGET — not
    *  merely one that eventually wins, because a board that only clears via a few hundred fishing taps
    *  is a grind, not a demo. Falls back to the last candidate if none qualify, so it always returns. */
-  private demoSeed(maxTries = 16): string {
+  private demoSeed(maxTries = 8): string {
     const budget = this.demoMoveBudget()
     let last = randomSeed()
     for (let i = 0; i < maxTries; i++) {
