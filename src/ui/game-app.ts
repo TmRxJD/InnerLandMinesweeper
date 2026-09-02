@@ -132,6 +132,7 @@ export class GameApp {
   /** Set the moment Autoplay is used in the current game. An autoplayed game never counts toward
    *  best times or the win record — the score has to be earned by the player. Reset on newGame. */
   private demoUsedThisGame = false
+  private demoMoves = 0 // moves taken in the current demo game — capped by demoMoveBudget to kill grinds
   private demoTimers: ReturnType<typeof setTimeout>[] = []
   private cursor!: HTMLElement
   private hintsOn = false
@@ -529,6 +530,7 @@ export class GameApp {
     this.height = snap.height
     this.focusIndex = 0
     this.demoUsedThisGame = false // fresh game — counts toward scores unless Autoplay is used
+    this.demoMoves = 0 // fresh board — reset the demo grind-guard counter
     this.hintTarget = null // the grid is rebuilt below; drop the stale highlight reference
     this.lastCoachSig = ''
     this.buildGrid(snap)
@@ -1032,17 +1034,26 @@ export class GameApp {
     this.demoStep()
   }
 
-  /** Pick a seed the reference player can actually CLEAR, for the Autoplay showcase only. Cheap: run
-   *  the fast heuristic to completion (untimed) on a throwaway engine for a few candidates and take the
-   *  first win — a board the heuristic clears, the stronger MCTS demo clears too. Falls back to the
-   *  last candidate if none win inside the budget, so it always returns promptly. */
-  private demoSeed(maxTries = 12): string {
+  /** The move budget a CLEAN win fits inside — a clear campaign runs ~3× the mine count; anything past
+   *  this is the broke-fishing grind, which makes a dreadful showcase, so both the seed pre-check and
+   *  the live demo treat exceeding it as "not a good board" and move on. */
+  private demoMoveBudget(): number {
+    return DIFFICULTIES[this.difficulty].mineCount * 4
+  }
+
+  /** Pick a seed the reference player clears QUICKLY, for the Autoplay showcase only. Cheap: run the
+   *  fast heuristic (untimed) on a few candidates and take the first that WINS INSIDE THE BUDGET — not
+   *  merely one that eventually wins, because a board that only clears via a few hundred fishing taps
+   *  is a grind, not a demo. Falls back to the last candidate if none qualify, so it always returns. */
+  private demoSeed(maxTries = 16): string {
+    const budget = this.demoMoveBudget()
     let last = randomSeed()
     for (let i = 0; i < maxTries; i++) {
       const seed = randomSeed()
       last = seed
       const sim = createEngine({ difficulty: this.difficulty, seed, revealHooks: REVEAL_HOOKS })
-      for (let m = 0; m < 400 && sim.snapshot().status === 'playing'; m++) {
+      let m = 0
+      for (; m < budget && sim.snapshot().status === 'playing'; m++) {
         const a = autoPlay(sim.snapshot())
         if (!a) break
         if (a.type === 'reveal') sim.reveal(a.coord)
@@ -1050,7 +1061,7 @@ export class GameApp {
         else sim.detonate(a.coord)
         sim.tick(0.45)
       }
-      if (sim.snapshot().status === 'won') return seed
+      if (sim.snapshot().status === 'won' && m <= budget) return seed
     }
     return last
   }
@@ -1099,6 +1110,10 @@ export class GameApp {
     this.demoUsedThisGame = true
     const snap = this.engine.snapshot()
     if (snap.status !== 'playing') return this.demoRestart(2400) // won/lost — next board
+    // Grind guard: a clean campaign wins well inside the budget. If this board runs past it (rare —
+    // demoSeed pre-clears within budget — but the live plan can still diverge onto a fishing grind),
+    // abandon it for a fresh clearable one rather than letting Autoplay grind for minutes.
+    if (++this.demoMoves > this.demoMoveBudget()) return this.demoRestart(1200)
     // The demo plays the reference strategist (the same beam-verified player the balance harness
     // validates): clear the field outward, groom a keystone mine, pump it with overlapping detonations,
     // then hook the packed cluster into the Boss and unload the chain. It commits to that plan rather
