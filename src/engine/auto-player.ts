@@ -409,10 +409,10 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
     cheb(m.coord, boss) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1
   const lethal = squad.length > 0 && predictChainDamage(squad, boss, snap) >= snap.bossHp
 
-  // 1. Boss campaign — deliver the chain (chainStarter detonates outer mines to pump an inner keystone,
-  //    then delivers it) when the squad is lethally gathered; otherwise, once the field surplus is spent,
-  //    hook the squad across the gap to finish it. The whole squad is reserved (below) at ANY distance so
-  //    a field cascade never detonates a mine mid-gather.
+  // 1. Boss campaign — chainStarter detonates outer squad mines to pump an inner keystone, then delivers
+  //    it, when the squad is lethally gathered; otherwise, once the field surplus is spent, hook the
+  //    squad across the gap to finish it. The whole squad is reserved (below) so a field cascade never
+  //    detonates a mine mid-gather.
   if (bossAlive && squad.length > 0) {
     if (lethal) {
       const starter = chainStarter(squad, boss, snap)
@@ -427,8 +427,8 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
     }
   }
 
-  // 2. Field cascade — the cleanest detonation order among field mines (the whole squad spared while the
-  //    Boss lives; once it's dead every mine is free to finish the ground).
+  // 2. Field cascade — cleanest detonation order among field mines (the squad spared while the Boss
+  //    lives; once it's dead every mine is free to finish the ground).
   const exclude = bossAlive ? squadKeys : new Set<number>()
   const chain = bestChain(engine, { exclude })
   const haveCovered = snap.tiles.some(t => (t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss')

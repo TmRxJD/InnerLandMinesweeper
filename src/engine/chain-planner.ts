@@ -58,6 +58,56 @@ function standingEnemies(s: BoardSnapshot): number {
   return n
 }
 
+export interface KeystoneResult {
+  /** Detonation order (best first) that pumps the keystone the most, never touching it. */
+  readonly sequence: Coord[]
+  /** The stack the keystone reaches after that order. */
+  readonly stack: number
+}
+
+/**
+ * Build a fat keystone WITHOUT hooks: search detonation orders (never detonating the keystone itself)
+ * that pump the armed mine at `keystone` to the biggest stack. Detonating a mine within reach of the
+ * keystone overlaps-charges it, and each blast also arms covered mines nearby that the next ply can
+ * fire in turn — so a natural field cluster snowballs one survivor toward the stack cap. Play the
+ * first move of the returned sequence; the pumpers are ordnance you already have, so this costs no
+ * hooks — only the finished keystone gets hooked to the Boss. Empty sequence when nothing pumps it.
+ */
+export function buildKeystone(engine: MinesweeperEngine, keystone: Coord, opts: { beamWidth?: number; maxDepth?: number } = {}): KeystoneResult {
+  const beamWidth = opts.beamWidth ?? 6
+  const maxDepth = opts.maxDepth ?? 8
+  const kKey = key(keystone)
+  const stackOf = (s: BoardSnapshot): number => {
+    const t = s.tiles.find(t => t.coord.x === keystone.x && t.coord.y === keystone.y)
+    return t && t.state === 'armed' ? t.mineCharge ?? 1 : 0
+  }
+  let best: KeystoneResult = { sequence: [], stack: stackOf(engine.snapshot()) }
+  let beam: { eng: MinesweeperEngine; seq: Coord[]; stack: number }[] = [{ eng: engine, seq: [], stack: best.stack }]
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const next: { eng: MinesweeperEngine; seq: Coord[]; stack: number }[] = []
+    for (const node of beam) {
+      const sn = node.eng.snapshot()
+      if (sn.status !== 'playing') continue
+      for (const t of sn.tiles) {
+        if (t.state !== 'armed' || key(t.coord) === kKey) continue
+        const eng2 = node.eng.clone()
+        eng2.detonate(t.coord)
+        const kstack = stackOf(eng2.snapshot())
+        if (kstack === 0) continue // keystone gone (shouldn't happen — blasts pump armed mines) — drop
+        const seq2 = [...node.seq, t.coord]
+        if (kstack > best.stack || (kstack === best.stack && seq2.length < best.sequence.length)) {
+          best = { sequence: seq2, stack: kstack }
+        }
+        next.push({ eng: eng2, seq: seq2, stack: kstack })
+      }
+    }
+    if (next.length === 0) break
+    next.sort((a, b) => b.stack - a.stack)
+    beam = next.slice(0, beamWidth)
+  }
+  return best
+}
+
 interface Node {
   eng: MinesweeperEngine
   seq: Coord[]
