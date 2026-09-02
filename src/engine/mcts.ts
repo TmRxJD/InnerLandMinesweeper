@@ -60,48 +60,39 @@ function applyAction(engine: MinesweeperEngine, a: AutoAction): void {
 
 /** The moves worth *considering* from a state — the legal action space the search chooses within.
  *
- *  Two phases, mirroring how the board is meant to be played: while the field still has ground, only
- *  clear it (detonate FAR ordnance, uncover the frontier) — the near-Boss killers are off the table,
- *  because spending one early is unrecoverable on a minimal Hard board and would just teach the search
- *  to lose. Once the field is clear, the killers open up: gather them with hooks and chain them into
- *  the Boss. Pruning self-defeating moves is not the search making the decision — WHICH far mine, which
- *  frontier tile, which mine to hook or detonate and in what order is still decided by simulation. */
+ *  Mines are one scarce pool: any armed mine can be detonated (to clear + refuel, or to chip the
+ *  Boss), and the mines nearest the Boss can be HOOKED toward it to cross the moat and land the kill.
+ *  Frontier taps are offered while there's charge to spend. The search decides WHICH — which mine to
+ *  spend clearing vs. save, which to hook in and when — and the loss/win reward teaches it that
+ *  over-clearing dooms the run. Nothing is phase-gated: the whole game space is on the table. */
 function candidateActions(snap: BoardSnapshot, revealSamples: number, rng: () => number): AutoAction[] {
   if (snap.status !== 'playing') return []
   const out: AutoAction[] = []
   const boss = bossOf(snap)
   const armed = snap.tiles.filter(t => t.state === 'armed')
-  const near = armed.filter(m => cheb(m.coord, boss) <= snap.gatherRadius)
-  const far = armed.filter(m => cheb(m.coord, boss) > snap.gatherRadius)
 
-  const w = snap.width
-  const covered = snap.tiles.filter(t => (t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss')
-  const fieldClear = covered.length === 0
+  for (const m of armed) out.push({ type: 'detonate', coord: m.coord })
 
-  if (fieldClear) {
-    // Boss phase: the killers are in play. Chain any of them, and (with charges) hook one Boss-ward
-    // or toward the nearest other near mine to tighten the cluster.
-    for (const m of near) out.push({ type: 'detonate', coord: m.coord })
-    for (const m of far) out.push({ type: 'detonate', coord: m.coord }) // stray field mines: cleanup
-    if (snap.hookCharges >= 1) {
-      for (const m of near) {
-        const toBoss = { x: Math.sign(boss.x - m.coord.x), y: Math.sign(boss.y - m.coord.y) }
-        if (toBoss.x || toBoss.y) out.push({ type: 'hook', coord: m.coord, dir: toBoss })
-        const mate = nearest(m, near)
-        if (mate) {
-          const toMate = { x: Math.sign(mate.coord.x - m.coord.x), y: Math.sign(mate.coord.y - m.coord.y) }
-          if ((toMate.x || toMate.y) && (toMate.x !== toBoss.x || toMate.y !== toBoss.y)) {
-            out.push({ type: 'hook', coord: m.coord, dir: toMate })
-          }
+  // Hook the handful of mines nearest the Boss toward it (delivery across the moat) and toward each
+  // other (to cluster for the chain). Capped to the closest few so the branching stays searchable.
+  if (snap.hookCharges >= 1 && armed.length > 0) {
+    const nearest6 = [...armed].sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, 6)
+    for (const m of nearest6) {
+      const toBoss = { x: Math.sign(boss.x - m.coord.x), y: Math.sign(boss.y - m.coord.y) }
+      if (toBoss.x || toBoss.y) out.push({ type: 'hook', coord: m.coord, dir: toBoss })
+      const mate = nearest(m, nearest6)
+      if (mate) {
+        const toMate = { x: Math.sign(mate.coord.x - m.coord.x), y: Math.sign(mate.coord.y - m.coord.y) }
+        if ((toMate.x || toMate.y) && (toMate.x !== toBoss.x || toMate.y !== toBoss.y)) {
+          out.push({ type: 'hook', coord: m.coord, dir: toMate })
         }
       }
     }
-    return out
   }
 
-  // Clearing phase: open ground with FAR blasts and frontier taps. Near-Boss killers are protected.
-  for (const m of far) out.push({ type: 'detonate', coord: m.coord })
   if (snap.playerCharge >= 1) {
+    const w = snap.width
+    const covered = snap.tiles.filter(t => (t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss')
     const hasRevealedNeighbour = (t: TileView): boolean => {
       for (let dy = -1; dy <= 1; dy++)
         for (let dx = -1; dx <= 1; dx++) {

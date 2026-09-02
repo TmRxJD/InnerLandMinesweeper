@@ -95,10 +95,15 @@ export interface BoardSnapshot {
   /** Chebyshev radius of the "near-Boss" zone: the mines inside it are the killers to gather into
    *  the blob; everything past it is field ordnance. Generation and the strategy layer share it. */
   readonly gatherRadius: number
+  /** Mines not yet detonated (your remaining ammo). Positions stay hidden — this is just the count,
+   *  like classic Minesweeper's mine counter — so you can budget how many to spend clearing vs. save
+   *  for the Boss without being told where they are. */
+  readonly minesRemaining: number
 }
 
-// There is no 'lost' — the board is always completable and the clock is only the score.
-export type GameStatus = 'playing' | 'won'
+// Mines are one scarce pool spent on BOTH clearing and the Boss, so bad allocation is fatal: 'lost'
+// fires the moment the Boss can no longer be killed with the mines you have left.
+export type GameStatus = 'playing' | 'won' | 'lost'
 
 // ---------------------------------------------------------------------------
 // Events — the write model the UI animates
@@ -128,6 +133,8 @@ export type GameEvent =
   | { kind: 'hookCharged'; coord: Coord; to: number }
   | { kind: 'hookUsed'; from: Coord; to: Coord; charges: number }
   | { kind: 'gameWon'; result: GameResult }
+  // The Boss can no longer be killed with the mines left on the board — the run is lost.
+  | { kind: 'gameLost'; result: GameResult }
 
 export type CauseOfArming = 'click' | 'blast'
 
@@ -145,8 +152,8 @@ export type EventList = readonly GameEvent[]
 export interface GameResult {
   readonly seed: string
   readonly difficulty: Difficulty
-  /** Always 'won' — the board is always completable; the clock only ranks you. */
-  readonly outcome: 'won'
+  /** 'won' = field cleared and Boss dead; 'lost' = ran the mine pool dry with the Boss still alive. */
+  readonly outcome: 'won' | 'lost'
   /** Higher is better: how much of par you beat, scaled by difficulty. */
   readonly score: number
   /** The real metric — clear time in whole seconds (lower is better). */

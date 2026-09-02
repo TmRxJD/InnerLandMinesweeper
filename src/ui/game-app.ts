@@ -504,7 +504,10 @@ export class GameApp {
           this.flashChargeUp(e.coord, e.to)
           break
         case 'gameWon':
-          this.onEnd(e.result)
+          this.onEnd(e.result, true)
+          break
+        case 'gameLost':
+          this.onEnd(e.result, false)
           break
       }
     }
@@ -639,13 +642,20 @@ export class GameApp {
     el.tabIndex = Number(el.dataset.i) === this.focusIndex ? 0 : -1
   }
 
-  private onEnd(result: GameResult): void {
+  private onEnd(result: GameResult, won: boolean): void {
     this.stopLoop()
-    this.banner.classList.add('is-shown', 'win')
-    const medal = result.medal === 'none' ? '' : `${result.medal.toUpperCase()} · `
-    this.banner.querySelector('.ilm-banner__title')!.textContent = 'Cleared'
-    this.banner.querySelector('.ilm-banner__detail')!.textContent =
-      `${medal}${this.fmtTime(result.timeSeconds)} · ${result.detonations} blasts · ${result.moves} moves`
+    this.banner.classList.add('is-shown', won ? 'win' : 'lose')
+    if (won) {
+      const medal = result.medal === 'none' ? '' : `${result.medal.toUpperCase()} · `
+      this.banner.querySelector('.ilm-banner__title')!.textContent = 'Cleared'
+      this.banner.querySelector('.ilm-banner__detail')!.textContent =
+        `${medal}${this.fmtTime(result.timeSeconds)} · ${result.detonations} blasts · ${result.moves} moves`
+    } else {
+      // Ran the mine pool dry with the Boss still alive.
+      this.banner.querySelector('.ilm-banner__title')!.textContent = 'Out of mines'
+      this.banner.querySelector('.ilm-banner__detail')!.textContent =
+        `The Boss survives — too many mines spent clearing. ${result.detonations} blasts · ${result.moves} moves`
+    }
     this.onResult?.(result)
   }
 

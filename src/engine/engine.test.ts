@@ -67,14 +67,19 @@ describe('boss', () => {
     expect(board.tiles.filter(t => t.tier !== 'boss').every(t => t.maxHp === 1)).toBe(true)
   })
 
-  it('guarantees mines within blast reach of the centre (so it is killable by blasts)', () => {
-    const board = truth('reach-seed')
+  it('keeps a Boss-free moat — NO mine spawns in blast reach, so the kill must be hooked in', () => {
+    // The moat (blastRadiusCap + 1) is one wider than any blast can reach, so a mine on it can't hit
+    // the Boss where it lies. Across many seeds, not a single mine spawns inside it.
     const bx = Math.floor(cfg.width / 2)
     const by = Math.floor(cfg.height / 2)
-    const near = board.tiles.filter(
-      t => t.isMine && Math.max(Math.abs(t.x - bx), Math.abs(t.y - by)) <= cfg.blastRadiusCap,
-    )
-    expect(near.length).toBeGreaterThanOrEqual(Math.ceil(cfg.bossHp / cfg.stackCap))
+    const moat = cfg.blastRadiusCap + 1
+    for (let i = 0; i < 40; i++) {
+      const board = truth(`moat-${i}`)
+      const inside = board.tiles.filter(
+        t => t.isMine && Math.max(Math.abs(t.x - bx), Math.abs(t.y - by)) <= moat,
+      )
+      expect(inside.length).toBe(0)
+    }
   })
 })
 
@@ -216,28 +221,37 @@ describe('detonation', () => {
     throw new Error('no two-apart mine pair found')
   })
 
-  it('damages the Boss one ring BEYOND the blast — a mine a tile away chips it with no hook', () => {
-    // The Boss must take damage when it merely NEIGHBOURS a blast tile, or a mine with a single
-    // empty tile between it and the Boss (Chebyshev 2, blast radius 1) could never hit it and you'd
-    // be forced to hook. Find an armed mine exactly two cells from the Boss, detonate it, assert the
-    // Boss lost `stack` (=1) HP with no hook used.
+  it('damages the Boss one ring BEYOND the blast — a hooked-in mine two tiles out chips it', () => {
+    // The Boss takes damage when it merely NEIGHBOURS a blast tile (radius+1). Mines now spawn past
+    // the moat, so hook one to Chebyshev 2 of the Boss (a radius-1 blast, one tile short) and confirm
+    // it still chips the Boss for its stack.
     const bx = Math.floor(cfg.width / 2)
     const by = Math.floor(cfg.height / 2)
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < 200; i++) {
       const seed = `boss-reach-${i}`
       const board = truth(seed)
-      const mine = board.tiles.find(m => m.isMine && Math.max(Math.abs(m.x - bx), Math.abs(m.y - by)) === 2)
+      const mine = [...board.tiles]
+        .filter(t => t.isMine)
+        .sort((a, b) => Math.max(Math.abs(a.x - bx), Math.abs(a.y - by)) - Math.max(Math.abs(b.x - bx), Math.abs(b.y - by)))[0]
       if (!mine) continue
       const engine = createEngine({ difficulty: DIFF, seed })
-      engine.reveal({ x: mine.x, y: mine.y }) // arm it (stack 1 → radius 1)
-      expect(engine.snapshot().hookCharges).toBe(0)
+      for (const h of board.tiles.filter(t => t.isHook).slice(0, 10)) engine.reveal({ x: h.x, y: h.y }) // earn hooks
+      if (engine.snapshot().hookCharges < 6) continue
+      engine.reveal({ x: mine.x, y: mine.y }) // arm it
+      let cur = { x: mine.x, y: mine.y }
+      for (let k = 0; k < 12; k++) {
+        if (Math.max(Math.abs(cur.x - bx), Math.abs(cur.y - by)) <= 2) break
+        const dir = { x: Math.sign(bx - cur.x), y: Math.sign(by - cur.y) }
+        if (!engine.useHook(cur, dir).some(e => e.kind === 'hookUsed')) break
+        cur = { x: cur.x + Math.sign(dir.x), y: cur.y + Math.sign(dir.y) }
+      }
+      if (Math.max(Math.abs(cur.x - bx), Math.abs(cur.y - by)) !== 2) continue // couldn't park it at 2
       const before = engine.snapshot().bossHp
-      engine.detonate({ x: mine.x, y: mine.y })
-      const after = engine.snapshot().bossHp
-      expect(after).toBe(before - 1) // radius-1 blast one tile short still chips the Boss
+      engine.detonate(cur)
+      expect(engine.snapshot().bossHp).toBe(before - 1) // radius-1 blast one tile short still chips it
       return
     }
-    throw new Error('no mine two cells from the boss found')
+    throw new Error('no hookable mine reached Chebyshev 2')
   })
 
   it('charges a mine one ring BEYOND the blast — non-touching mines pump each other without a hook', () => {

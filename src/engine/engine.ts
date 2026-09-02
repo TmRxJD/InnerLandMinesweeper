@@ -89,7 +89,7 @@ class Engine implements MinesweeperEngine {
 
     if (tile.isMine) {
       this.armMine(tile, 'click', events)
-      this.checkWin(events)
+      this.checkEnd(events)
       return events
     }
 
@@ -163,7 +163,7 @@ class Engine implements MinesweeperEngine {
 
     if (chainCleared > this.maxChain) this.maxChain = chainCleared
 
-    this.checkWin(events)
+    this.checkEnd(events)
     return events
   }
 
@@ -199,6 +199,7 @@ class Engine implements MinesweeperEngine {
       stackCap: this.cfg.stackCap,
       blastRadiusCap: this.cfg.blastRadiusCap,
       gatherRadius: this.cfg.gatherRadius,
+      minesRemaining: this.board.tiles.reduce((n, t) => n + (t.isMine && t.state !== 'detonated' ? 1 : 0), 0),
     }
   }
 
@@ -224,7 +225,7 @@ class Engine implements MinesweeperEngine {
     tile.hp -= 1
     if (tile.hp <= 0) this.clearGroundTile(tile, 1, events)
     else this.damageTile(tile, events)
-    this.checkWin(events)
+    this.checkEnd(events)
   }
 
   /** A tappable tile (Common or Boss) took partial damage (charge spent < its HP, or a blast
@@ -281,7 +282,7 @@ class Engine implements MinesweeperEngine {
     this.hookCharges -= 1
     this.moveMine(mine, dest, events)
     events.push({ kind: 'hookUsed', from: { x: coord.x, y: coord.y }, to: { x: dest.x, y: dest.y }, charges: this.hookCharges })
-    this.checkWin(events)
+    this.checkEnd(events)
     return events
   }
 
@@ -375,32 +376,52 @@ class Engine implements MinesweeperEngine {
     events.push({ kind: 'playerChargeChanged', from, to: clamped })
   }
 
-  private checkWin(events: GameEvent[]): void {
+  /** The most Boss damage the mines STILL on the board could ever deliver, if every one were
+   *  perfectly gathered and chained (each fires at its escalated stack, capped). A conservative
+   *  upper bound: if even this can't reach the Boss's HP, the run is unwinnable however well you play
+   *  — you've spent too many mines clearing ground and have nothing left to finish the kill. */
+  private bossStillKillable(): boolean {
+    const hp = this.bossHp()
+    if (hp <= 0) return true
+    let mines = 0
+    for (const t of this.board.tiles) if (t.isMine && t.state !== 'detonated') mines++
+    const cap = this.cfg.stackCap
+    const maxDeliverable = mines <= cap ? (mines * (mines + 1)) / 2 : (cap * (cap + 1)) / 2 + (mines - cap) * cap
+    return maxDeliverable >= hp
+  }
+
+  private checkEnd(events: GameEvent[]): void {
     if (this.status !== 'playing') return
+    // Loss first: the mine pool can no longer finish the Boss — bad allocation doomed the run.
+    if (!this.bossStillKillable()) {
+      this.endGame('lost', events)
+      return
+    }
+    // Win: the whole field is cleared (the Boss, once dead, becomes cleared ground too).
     for (const t of this.board.tiles) {
       if (t.state === 'covered' || t.state === 'cracked') return
     }
-    this.endGame(events)
+    this.endGame('won', events)
   }
 
-  private endGame(events: GameEvent[]): void {
-    this.status = 'won' // the only end state — the board is always completable
-    const result = this.buildResult()
+  private endGame(outcome: 'won' | 'lost', events: GameEvent[]): void {
+    this.status = outcome
+    const result = this.buildResult(outcome)
     this.finalResult = result
-    events.push({ kind: 'gameWon', result })
+    events.push({ kind: outcome === 'won' ? 'gameWon' : 'gameLost', result })
   }
 
-  private buildResult(): GameResult {
+  private buildResult(outcome: 'won' | 'lost'): GameResult {
     const timeSeconds = Math.round(this.timeElapsed)
     const parLeft = Math.max(0, this.cfg.parSeconds - this.timeElapsed)
     return {
       seed: this.seed,
       difficulty: this.difficulty,
-      outcome: 'won',
-      // Score rewards speed: whatever of par you beat, scaled. Faster clear = higher score.
-      score: Math.max(0, Math.round(parLeft * this.cfg.scoreDifficultyMultiplier)),
+      outcome,
+      // Score rewards speed on a win; a lost run scores nothing.
+      score: outcome === 'won' ? Math.max(0, Math.round(parLeft * this.cfg.scoreDifficultyMultiplier)) : 0,
       timeSeconds,
-      medal: medalForTime(this.cfg, timeSeconds),
+      medal: outcome === 'won' ? medalForTime(this.cfg, timeSeconds) : 'none',
       moves: this.moves,
       detonations: this.detonations,
       tilesCleared: this.tilesCleared,

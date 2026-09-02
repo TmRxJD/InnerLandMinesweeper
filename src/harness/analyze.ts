@@ -115,7 +115,7 @@ function runInstrumented(difficulty: Difficulty, seed: string, policy: Policy): 
   const result = engine.result()
   const snap = engine.snapshot()
   return {
-    won: result !== null,
+    won: result?.outcome === 'won',
     time: result?.timeSeconds ?? snap.timeElapsed,
     reveals,
     detonations,

@@ -11,10 +11,6 @@ import { Rng } from './rng'
 // The toughness ramp for random ground. `boss` is excluded — it is placed once, at centre.
 const TIER_ORDER: readonly Tier[] = ['common', 'advanced', 'elite', 'fleet']
 
-/** Chebyshev radius around the Boss kept free of mines: no mine spawns within this, so the
- *  Boss-adjacent cells are mine-free landing pads to pack mines onto, and no mine is in range of
- *  the Boss at low stack. Delivery must be earned by hooking mines inward. */
-const BOSS_FREE = 2
 
 export interface Tile {
   readonly x: number
@@ -159,38 +155,12 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
     }
   }
 
-  // The near-Boss mines are the ONLY ones that can kill it. Sized minimally: a tight cluster of N
-  // mines detonated in sequence deals 1+2+…+N = N(N+1)/2 (each blast hits the Boss AND overlap-
-  // charges the rest), so killing HP H needs ≈√(2H) mines. Place ≈√(2H) mines in ONE compact WEDGE
-  // at distance BOSS_FREE…radiusCap — never adjacent to the Boss, never touching each other — so
-  // you must use directional Magnetic Hooks to pull them into a tight blob on the Boss ring and
-  // chain it. Compact wedge → gathering is cheap in hooks. Verified solvable by the reference bot.
-  const wangle = rng.float() * Math.PI * 2
-  const wx = Math.cos(wangle)
-  const wy = Math.sin(wangle)
-  // The wedge fills the "near" zone (cfg.gatherRadius), the SAME radius the strategy layer gathers
-  // from — so every wedge mine is a killer to pack and every field mine spawns strictly outside it.
-  const ring = cfg.gatherRadius
-  const centreCells: { i: number; d: number }[] = []
-  for (let dy = -ring; dy <= ring; dy++) {
-    for (let dx = -ring; dx <= ring; dx++) {
-      const cheb = Math.max(Math.abs(dx), Math.abs(dy))
-      if (cheb < BOSS_FREE || cheb > ring) continue // inner mine-free zone … out to the near edge
-      const len = Math.hypot(dx, dy)
-      if (len > 0 && (dx * wx + dy * wy) / len < 0) continue // ~180° wedge toward (wx,wy)
-      const nx = boss.x + dx
-      const ny = boss.y + dy
-      const i = idx(width, nx, ny)
-      if (nx >= 0 && ny >= 0 && nx < width && ny < height && !reserved.has(i)) centreCells.push({ i, d: len })
-    }
-  }
-  // ≈√(2·HP) mines chain to exactly HP if perfectly packed; `killerMargin` on top is the per-
-  // difficulty hook-reliance dial (big on easy → a spread chain wins hook-free; ~1 on hard → only a
-  // hooked tight cluster reliably kills). Placing nearest-first keeps the wedge compact.
-  const minCentreMines = Math.min(centreCells.length, Math.ceil(Math.sqrt(2 * cfg.bossHp)) + cfg.killerMargin)
-
-  // No two mines may spawn touching (Chebyshev-adjacent) — stacks are built only by hooking. Break
-  // ties in the nearest-first order with the RNG so the wedge isn't a deterministic lattice.
+  // Mines are ONE scarce pool, spent on BOTH clearing ground and killing the Boss — there are no
+  // reserved "killer" mines. Scatter `mineCount` of them anywhere off the reserved cells, never
+  // touching (stacks are built by play, not spawned adjacent). How you divide them between the field
+  // and the Boss is the whole game: blast away too many clearing and the mines left can't finish the
+  // kill — the engine calls that run lost (see bossStillKillable). `mineCount` is tuned so a good
+  // allocation wins and a greedy one runs itself dry.
   const mineCells = new Set<number>()
   const touchesMine = (i: number): boolean => {
     const x = i % width
@@ -200,20 +170,19 @@ export function generateBoard(cfg: DifficultyConfig, seed: string): Board {
         if ((dx || dy) && x + dx >= 0 && y + dy >= 0 && x + dx < width && y + dy < height && mineCells.has(idx(width, x + dx, y + dy))) return true
     return false
   }
-  rng.shuffle(centreCells)
-  centreCells.sort((a, b) => a.d - b.d)
-  for (const { i } of centreCells) {
-    if (mineCells.size >= minCentreMines) break
-    if (!touchesMine(i)) mineCells.add(i)
-  }
-  // Fill the rest only BEYOND the near zone, so the near-Boss set stays exactly the wedge.
-  const rest: number[] = []
+  // A Boss-free moat: no mine spawns within (blastRadiusCap + 1) of the Boss — just out of reach of
+  // even a max-stack blast's +1 rule — so NO mine can hit the Boss where it lies. To land the kill
+  // you MUST hook mines across the moat into range. Hooks aren't a nicety, they're the only delivery.
+  const bossFree = cfg.blastRadiusCap + 1
+  const cells: number[] = []
   for (let i = 0; i < total; i++) {
+    if (reserved.has(i)) continue
     const cheb = Math.max(Math.abs((i % width) - boss.x), Math.abs(((i / width) | 0) - boss.y))
-    if (!reserved.has(i) && !mineCells.has(i) && cheb > ring) rest.push(i)
+    if (cheb <= bossFree) continue
+    cells.push(i)
   }
-  rng.shuffle(rest)
-  for (const i of rest) {
+  rng.shuffle(cells)
+  for (const i of cells) {
     if (mineCells.size >= cfg.mineCount) break
     if (!touchesMine(i)) mineCells.add(i)
   }

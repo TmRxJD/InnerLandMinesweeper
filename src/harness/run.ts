@@ -68,7 +68,7 @@ export function runGame(difficulty: Difficulty, seed: string, bot: Bot): RunOutc
     if (stuck >= 40) break // genuinely stuck (no regen, no useful move)
   }
   const result = engine.result()
-  return { finished: result !== null, timeSeconds: result?.timeSeconds ?? elapsed, moves: engine.snapshot().moves, hooksUsed, result }
+  return { finished: result?.outcome === 'won', timeSeconds: result?.timeSeconds ?? elapsed, moves: engine.snapshot().moves, hooksUsed, result }
 }
 
 function median(xs: number[]): number {
@@ -148,17 +148,25 @@ function main(): void {
     const aggs = sweep(d, n)
     report(d, aggs)
     const greedy = aggs.find(a => a.bot === 'greedy')!
+    const noHook = aggs.find(a => a.bot === 'noHook')
     const prober = aggs.find(a => a.bot === 'blindProber')!
-    if (greedy.finishedPct < 0.98) {
-      flags.push(`⚠ ${d}: greedy finished only ${Math.round(greedy.finishedPct * 100)}% — some boards can't be completed (mine supply near centre?)`)
+    // Mines are a scarce pool and runs are losable, so the invariants changed: a sensible player
+    // should win a HEALTHY-BUT-NOT-CERTAIN share, and careless/hookless play should essentially fail.
+    if (greedy.finishedPct < 0.4) {
+      flags.push(`⚠ ${d}: greedy only ${Math.round(greedy.finishedPct * 100)}% — too punishing even for sensible play`)
     }
-    // Skill is rewarded if blind play mostly can't finish, or finishes slower than greedy.
-    if (prober.finishedPct > 0.5 && greedy.medTime >= prober.medTime) {
-      flags.push(`⚠ ${d}: greedy (${greedy.medTime}s) not faster than blindProber (${prober.medTime}s) — skill isn't rewarded`)
+    if (greedy.finishedPct > 0.95) {
+      flags.push(`⚠ ${d}: greedy ${Math.round(greedy.finishedPct * 100)}% — too forgiving; careless play barely risks a loss`)
+    }
+    if (prober.finishedPct > 0.1) {
+      flags.push(`⚠ ${d}: blindProber wins ${Math.round(prober.finishedPct * 100)}% — careless play should fail`)
+    }
+    if (noHook && noHook.finishedPct > 0.05) {
+      flags.push(`⚠ ${d}: noHook wins ${Math.round(noHook.finishedPct * 100)}% — hooks should be required`)
     }
   }
   console.log('\n--- flags ---')
-  if (flags.length === 0) console.log('none — every board completes; skilled play clears faster')
+  if (flags.length === 0) console.log('none — hard but fair: sensible play wins a healthy share, careless/hookless play fails')
   else for (const f of flags) console.log(f)
 }
 
