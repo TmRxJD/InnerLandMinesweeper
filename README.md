@@ -84,5 +84,6 @@ pnpm build:embed    # self-contained embed bundle → dist-embed/
 pnpm test           # vitest (engine + balance)
 pnpm type-check     # tsc, no emit (strict, no unused)
 pnpm harness        # headless speed sweep: completion, times, medals, hooks used, cheese check
+pnpm analyze        # strategic analysis: stack building, hooks, blast eff, boss economy, VARIETY
 pnpm play           # ASCII CLI — t/d/h = tap/detonate/hook; --auto, --debug, --moves
 ```

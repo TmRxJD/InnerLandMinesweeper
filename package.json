@@ -23,7 +23,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "harness": "tsx src/harness/run.ts",
-    "play": "tsx src/cli/play.ts"
+    "play": "tsx src/cli/play.ts",
+    "analyze": "tsx src/harness/analyze.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
