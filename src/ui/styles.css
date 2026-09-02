@@ -104,13 +104,15 @@
   width: 30px;
   height: 30px;
   flex: none;
+  padding: 0; /* reset UA button padding, or wide emoji glyphs (🏆) get squeezed off-centre */
   border-radius: 50%;
   border: 1px solid var(--tile-edge);
   background: var(--tile-raised);
   color: var(--ink-dim);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1;
+  text-align: center;
   cursor: pointer;
   display: grid;
   place-items: center;
