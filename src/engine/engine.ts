@@ -249,6 +249,8 @@ class Engine implements MinesweeperEngine {
       blastRadiusCap: this.cfg.blastRadiusCap,
       gatherRadius: this.cfg.gatherRadius,
       overlapBoostPerStack: this.cfg.overlapBoostPerStack,
+      shrapnelPerStack: this.cfg.shrapnelPerStack,
+      shrapnelMaxReach: this.cfg.shrapnelMaxReach,
       minesRemaining: this.board.tiles.reduce((n, t) => n + (t.isMine && t.state !== 'detonated' ? 1 : 0), 0),
     }
   }
@@ -372,6 +374,7 @@ class Engine implements MinesweeperEngine {
     if (!dest || dest.tier === 'boss' || (dest.isMine && dest.state !== 'detonated')) return []
 
     const events: GameEvent[] = []
+    this.moves++ // a hook is a real action — it counts toward the move budget like a reveal/detonate
     this.bossHitThisAction = false
     this.hookCharges -= 1
     this.setPlayerCharge(this.playerCharge - 1, events) // hooks draw on the charge budget too

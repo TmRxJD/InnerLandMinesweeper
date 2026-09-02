@@ -99,6 +99,12 @@ export interface BoardSnapshot {
   /** How much a detonation pumps a neighbouring mine's stack, per point of the DETONATOR's stack
    *  (via `overlapBoost`). The strategy layer needs it to predict how fat a chain becomes. */
   readonly overlapBoostPerStack: number
+  /** Shrapnel per point of stack, and its hard reach cap. A blast clears its radius AND takes
+   *  `floor(stack · shrapnelPerStack)` more enemies from the ring just outside it (out to
+   *  `shrapnelMaxReach`). The strategy layer needs both to judge how much ground a big blast really
+   *  clears — the whole point of building a fat mine to clear a crowd in one move. */
+  readonly shrapnelPerStack: number
+  readonly shrapnelMaxReach: number
   /** Chebyshev radius of the "near-Boss" zone: the mines inside it are the killers to gather into
    *  the blob; everything past it is field ordnance. Generation and the strategy layer share it. */
   readonly gatherRadius: number

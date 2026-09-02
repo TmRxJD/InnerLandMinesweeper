@@ -197,18 +197,35 @@ function evaluate(engine: MinesweeperEngine): number {
   const bossFraction = s.bossMaxHp > 0 ? 1 - s.bossHp / s.bossMaxHp : 1
   const shieldStripped = s.bossShieldMax > 0 ? 1 - s.bossShield / s.bossShieldMax : 1
 
+  // KILL-POOL MARGIN — the loss condition the old eval was blind to, and the reason it played like it
+  // was making random moves. You LOSE the instant the mines still on the board can no longer, even
+  // perfectly chained, deal the Boss's remaining HP. So every mine is precious ammo: detonating one
+  // in a far corner for a couple of ground tiles drains this pool for almost nothing, and enough of
+  // that throws the run — which is exactly what the old eval rewarded (clearing any tile scored big).
+  // `maxDeliverable` mirrors the engine's own bossStillKillable bound (triangular stacking, capped).
+  // We do NOT reward a fat margin (you must spend the pool to win) — we PUNISH letting it approach
+  // zero, a cliff that makes wasteful detonations read as the mistakes they are while leaving genuine
+  // boss-damage detonations (which shrink HP as fast as they shrink the pool) net-positive.
+  const cap = s.stackCap
+  const mines = s.minesRemaining
+  const maxDeliverable = mines <= cap ? (mines * (mines + 1)) / 2 : (cap * (cap + 1)) / 2 + (mines - cap) * cap
+  const margin = maxDeliverable - s.bossHp
+  const buffer = Math.max(3, s.bossHp * 0.6) // "comfortable" slack, relative to what's left to kill
+  const marginPenalty = margin <= 0 ? 30_000 : margin < buffer ? ((buffer - margin) / buffer) * 9000 : 0
+
   return (
-    clearedFraction * 5000 + // clearing the field is one of the two win conditions
-    bossFraction * 4000 + // HP damage is the other
-    shieldStripped * 600 + // stripping the shield is real progress toward HP damage
-    clusterValue * 90 + // a packed, in-range cluster is the thing that wins — reward building it
-    tightness * 70 + // adjacency within that cluster — pack it tight, no gaps, so it chains
-    biggestStack * 40 + // growing a fat mine (overlap payoff) is progress
-    armedStackTotal * 6 + // some armed ordnance on the board is good
-    s.minesRemaining * 8 + // ammo in reserve
-    s.hookCharges * 15 - // hooks are the only delivery tool across the moat — hoard a few
-    s.moves * 10 - // gentle MOVE penalty: prefer the same progress in fewer moves, but don't starve the
-    s.timeElapsed * 6 // necessary setup (gathering/finding). The big fewer-moves reward is on the WIN.
+    bossFraction * 7000 + // killing the Boss is the whole point — dominate all but an actual win
+    shieldStripped * 1400 + // stripping the shield is the gate to HP damage
+    clusterValue * 130 + // a packed, in-range cluster is what delivers the kill — reward building it
+    tightness * 100 + // adjacency within that cluster — pack it tight so it chains (hook mines together)
+    biggestStack * 70 + // growing a fat keystone mine (the overlap-boost payoff) is real progress
+    clearedFraction * 1100 + // the OTHER win condition — but far below boss work, so it won't cash a mine for corners
+    armedStackTotal * 5 + // some armed ordnance on the board is good
+    s.minesRemaining * 16 + // ammo is precious: spending a mine must earn more than a couple of tiles
+    s.hookCharges * 4 - // holding a hook is mildly good, not so much that it hoards them unused
+    marginPenalty - // the cliff — never drain the kill pool below what still finishes the Boss
+    s.moves * 12 - // MOVE penalty: fewer, bigger moves. The rising per-run pressure rides on this term
+    s.timeElapsed * 6 // and the clock
   )
 }
 
