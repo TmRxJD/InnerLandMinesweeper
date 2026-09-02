@@ -345,7 +345,10 @@ class Engine implements MinesweeperEngine {
 
   private destroyGroundTile(tile: Tile, events: GameEvent[], from?: Coord): void {
     tile.state = 'cleared'
-    tile.numberKnown = false
+    // Numbers ALWAYS show on cleared ground, however it was cleared — a blast-vaporised tile reveals its
+    // adjacent-mine count just like a hand-tapped one, and it stays live as mines move (see
+    // adjustNeighbourNumbers). Deduction is the point of the game; hiding blast numbers only hid info.
+    tile.numberKnown = true
     tile.hp = 0
     this.tilesCleared++
     events.push(from
@@ -399,16 +402,16 @@ class Engine implements MinesweeperEngine {
    *  stack, and re-deriving adjacency counts so revealed numbers stay truthful. */
   private moveMine(mine: Tile, dest: Tile, events: GameEvent[]): void {
     const stack = mine.mineCharge
-    // Old cell becomes cleared ground (no number leak — it was covered), its neighbours lose 1.
+    // Old cell becomes cleared ground; its neighbours lose 1 mine from their counts.
     this.adjustNeighbourNumbers(mine, -1, events)
     mine.isMine = false
     mine.mineCharge = 0
     mine.state = 'cleared'
-    mine.numberKnown = false
     mine.hp = 0
-    // Recompute the vacated cell's own adjacency (it is ground now) — not shown (numberKnown
-    // false), but kept correct for consistency.
+    // Recompute the vacated cell's own adjacency (it is ground now) and SHOW it — numbers always show
+    // on cleared ground, and this cell was under a mine you just hooked away.
     mine.adjacent = neighbours(this.board, mine.x, mine.y).filter(n => n.isMine).length
+    mine.numberKnown = true
     // If an enemy still occupies the destination, the pull crushes it (a free clear).
     if (dest.state === 'covered' || dest.state === 'cracked') {
       dest.hp = 0
