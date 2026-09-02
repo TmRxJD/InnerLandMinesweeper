@@ -245,17 +245,34 @@ function clearedNeighbourCount(t: TileView, snap: BoardSnapshot): number {
   return n
 }
 
-/** Choose the next tile to uncover with intent instead of scanning rows. Among the frontier (tiles
- *  touching already-cleared ground — so the explored area grows as one connected region, never a
- *  teleporting cursor) prefer the tile boxed in by the MOST cleared neighbours. That fills concave
- *  pockets first and grows the cleared area as a smooth, rounded blob — it reads as a player working
- *  a region rather than a cursor scanning left-to-right — and it's actually *faster* than a row scan,
- *  because a compact front feeds the blast-clears better. (A centre-ward bias was tried and dropped:
- *  it dragged the front inward and slowed the clear badly, especially on the big Hard board.) */
+/** Crude Minesweeper mine-probability for a covered tile, read off the revealed numbers around it: for
+ *  each adjacent cleared number, the mines it still needs spread evenly over its covered neighbours. A
+ *  tile next to a "3" that has exactly three covered neighbours scores ~3 (a certain mine); a tile no
+ *  number touches scores 0. Why it matters: revealing a covered MINE costs no charge (it just arms),
+ *  while revealing ground costs a charge — so uncovering the LIKELY mines first arms fuel/ordnance for
+ *  free instead of tapping the charge away on ground, which is what left the bot broke and grinding. */
+function mineLikelihood(t: TileView, snap: BoardSnapshot): number {
+  let score = 0
+  for (const n of neighbours8(snap, t.coord.x, t.coord.y)) {
+    if (n.state !== 'cleared' || n.number === undefined || n.number <= 0) continue
+    const nn = neighbours8(snap, n.coord.x, n.coord.y)
+    const covered = nn.filter(c => c.state === 'covered').length
+    const armed = nn.filter(c => c.state === 'armed').length
+    const need = n.number - armed
+    if (need > 0 && covered > 0) score += need / covered
+  }
+  return score
+}
+
+/** Choose the next tile to uncover. Prefer a tile the numbers say is a MINE — arming it is free (no
+ *  charge) and hands the bot fuel and chain-building ordnance, instead of spending charge tapping
+ *  ground. Ties, and tiles no number constrains, fall back to the most cleared-enclosed frontier tile,
+ *  so the explored area still grows as one connected blob (never a teleporting cursor) and blasts feed
+ *  it. This deduction is what keeps charge healthy without any passive regen. */
 function pickReveal(tappable: TileView[], snap: BoardSnapshot): TileView | null {
   const frontier = tappable.filter(t => hasRevealedNeighbour(t, snap, snap.width))
   const pool = frontier.length > 0 ? frontier : tappable
-  return bestBy(pool, t => clearedNeighbourCount(t, snap))
+  return bestBy(pool, t => mineLikelihood(t, snap) * 12 + clearedNeighbourCount(t, snap))
 }
 
 /** One move for the given board, or null if there is nothing useful to do right now.
@@ -336,8 +353,10 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
   const CLEAR_THRESHOLD = 1
   if (surplus > 1) {
     const pool = fieldMines.filter(m => clearValue(m, snap) >= CLEAR_THRESHOLD)
-    // Prefer the biggest fresh clear; a faint far-bias only breaks ties toward spending outer ordnance.
-    const c = bestBy(pool, m => clearValue(m, snap) + cheb(m.coord, boss) * 0.2)
+    // Purely the biggest fresh crowd — no distance bias. (A faint far-bias used to nudge every clear
+    // toward the edges, which read as "obsessed with corners"; clearValue already rewards pumping a
+    // neighbour, so stack-building is what breaks ties, not position.)
+    const c = bestBy(pool, m => clearValue(m, snap))
     if (c) return { type: 'detonate', coord: c.coord }
   }
 
@@ -358,7 +377,7 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
   // Broke with ground left: no regen — refuel by detonating a mine, IF we still have surplus to spend
   // (prefer a far one). Out of surplus and out of charge → nothing but the squad remains: stuck.
   if (tappable.length > 0 && surplus > 0) {
-    const refuel = bestBy(mines, m => clearValue(m, snap) * 2 + (m.mineCharge ?? 1) + cheb(m.coord, boss) * 0.4)
+    const refuel = bestBy(mines, m => clearValue(m, snap) * 2 + (m.mineCharge ?? 1))
     if (refuel) return { type: 'detonate', coord: refuel.coord }
   }
 

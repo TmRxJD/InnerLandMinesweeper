@@ -15,6 +15,7 @@
 
 import type { BoardSnapshot, Coord, MinesweeperEngine, TileView } from './types'
 import { autoPlay, type AutoAction } from './auto-player'
+import { blastRadiusForStack } from './tuning'
 
 export interface MctsOptions {
   /** Search budget: how many futures to simulate before committing to a move. More = stronger and
@@ -171,18 +172,43 @@ function evaluate(engine: MinesweeperEngine): number {
   let biggestStack = 0
   let armedStackTotal = 0
   const inRange: { x: number; y: number; stk: number }[] = [] // armed mines that can strike the Boss
+  const armedList: { x: number; y: number; stk: number }[] = [] // every armed mine (for loaded-blast)
+  const coveredList: { x: number; y: number }[] = [] // every standing field enemy (blast fodder)
   for (const t of s.tiles) {
     if (t.state === 'cleared' || t.state === 'detonated') clearedOrGone++
-    else if (t.state === 'armed') {
+    else if (t.state === 'covered' || t.state === 'cracked') {
+      if (t.tier !== 'boss') coveredList.push({ x: t.coord.x, y: t.coord.y })
+    } else if (t.state === 'armed') {
       const stk = t.mineCharge ?? 1
       armedStackTotal += stk
       if (stk > biggestStack) biggestStack = stk
+      armedList.push({ x: t.coord.x, y: t.coord.y, stk })
       const d = cheb(t.coord, boss)
       // In strike range → full value; otherwise decays with distance (a mine 3 rings out is worth
       // far less than one on the doorstep). This makes GATHERING toward the Boss score as progress.
       clusterValue += d <= strikeRange ? stk : stk / (1 + (d - strikeRange))
       if (d <= strikeRange) inRange.push({ x: t.coord.x, y: t.coord.y, stk })
     }
+  }
+  // LOADED BLAST — the most field enemies any single armed mine could take RIGHT NOW: everything in its
+  // stack's blast radius, plus a shrapnel ring. A fat mine sitting on a crowd scores high here, so the
+  // search is pulled toward BUILDING one (pumping a keystone) and FIRING it into the pack — the "clear a
+  // whole crowd in one blast" play — instead of popping stack-1 mines one at a time across the board.
+  // This is the term that makes the clearing phase look planned rather than scattered.
+  let loadedBlast = 0
+  for (const m of armedList) {
+    const r = blastRadiusForStack(m.stk, s.blastRadiusCap)
+    const reach = Math.min(r + 1, s.shrapnelMaxReach)
+    const shrapnelCap = Math.floor(m.stk * s.shrapnelPerStack)
+    let inRadius = 0
+    let ring = 0
+    for (const c of coveredList) {
+      const d = Math.max(Math.abs(c.x - m.x), Math.abs(c.y - m.y))
+      if (d <= r) inRadius++
+      else if (d <= reach) ring++
+    }
+    const killed = inRadius + Math.min(ring, shrapnelCap) // radius vaporises all; shrapnel caps by stack
+    if (killed > loadedBlast) loadedBlast = killed
   }
   // Tightness: a TIGHT blob of in-range mines chains far better than the same mines with gaps between
   // them (an overlapping detonation pumps its neighbours). Reward adjacency so it PACKS the cluster —
@@ -219,6 +245,7 @@ function evaluate(engine: MinesweeperEngine): number {
     clusterValue * 130 + // a packed, in-range cluster is what delivers the kill — reward building it
     tightness * 100 + // adjacency within that cluster — pack it tight so it chains (hook mines together)
     biggestStack * 70 + // growing a fat keystone mine (the overlap-boost payoff) is real progress
+    loadedBlast * 55 + // a big blast primed over a crowd — reward BUILDING toward it, not stack-1 pops
     clearedFraction * 1100 + // the OTHER win condition — but far below boss work, so it won't cash a mine for corners
     armedStackTotal * 5 + // some armed ordnance on the board is good
     s.minesRemaining * 16 + // ammo is precious: spending a mine must earn more than a couple of tiles
