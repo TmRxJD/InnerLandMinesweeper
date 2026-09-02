@@ -28,16 +28,13 @@ export interface DifficultyConfig {
   /** Boss HP. The Boss is the only multi-hit tile; it must take several stacked blasts, so keep
    *  it comfortably above `stackCap` (≈2.5×) or a single maxed mine one-shots the climax. */
   readonly bossHp: number
-  /** Boss shield: a buffer that absorbs blast damage BEFORE HP, and — unlike HP — regrows if you
-   *  leave the Boss alone (see below). It stops a single overkill cluster from one-shotting the
-   *  climax and, with regen, punishes clearing the whole board in peace then alpha-striking. */
-  readonly bossShield: number
-  /** Moves the Boss can go UNHARMED before its shield starts regrowing (a grace window so a normal
-   *  gather-then-strike isn't fighting regen the whole time). */
-  readonly bossRegenDelayMoves: number
-  /** Shield regained per move once past the delay, capped at `bossShield`. Keep it slow — it's a
-   *  "don't dawdle" nudge, not a wall. */
-  readonly bossShieldRegenPerMove: number
+  /** Boss shield CHARGES. The shield is a hit-counter, not an HP pool: while it has charges, any hit
+   *  (whatever its damage) knocks off exactly ONE charge and deals NO HP damage — no overflow. You
+   *  must hit the Boss `bossShieldCharges` times to strip the shield before a hit reaches its HP. */
+  readonly bossShieldCharges: number
+  /** Moves the Boss can go WITHOUT being damaged before it regains one shield charge (capped at
+   *  `bossShieldCharges`). Lower = regenerates faster = more punishing to dawdle. */
+  readonly bossShieldRegenMoves: number
   /** Target clear time in seconds — the par used for score and medals. NOT a loss timer;
    *  running past it just lowers the score. */
   readonly parSeconds: number
@@ -109,10 +106,9 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 30,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
-    bossHp: 14,
-    bossShield: 5,
-    bossRegenDelayMoves: 4,
-    bossShieldRegenPerMove: 1,
+    bossHp: 7,
+    bossShieldCharges: 3,
+    bossShieldRegenMoves: 5, // easy: 1 charge back every 5 idle moves
     parSeconds: 50,
     goldSeconds: 30,
     silverSeconds: 38,
@@ -136,10 +132,9 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 45,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
-    bossHp: 30,
-    bossShield: 9,
-    bossRegenDelayMoves: 4,
-    bossShieldRegenPerMove: 1,
+    bossHp: 22,
+    bossShieldCharges: 3,
+    bossShieldRegenMoves: 4, // standard: 1 charge back every 4 idle moves
     parSeconds: 66,
     goldSeconds: 44,
     silverSeconds: 54,
@@ -163,10 +158,9 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 70,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
-    bossHp: 42,
-    bossShield: 12,
-    bossRegenDelayMoves: 4,
-    bossShieldRegenPerMove: 2,
+    bossHp: 34,
+    bossShieldCharges: 3,
+    bossShieldRegenMoves: 3, // hard: 1 charge back every 3 idle moves
     parSeconds: 90,
     goldSeconds: 60,
     silverSeconds: 74,

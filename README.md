@@ -34,9 +34,10 @@ src/
     types.ts     The contract: TileView, BoardSnapshot, GameEvent, GameResult, MinesweeperEngine.
     engine.ts    createEngine — reveal / detonate / useHook / tick, emits an ordered EventList.
     board.ts     Seeded board generation (corner opening, non-touching mines outside a Boss moat, hook tiles).
-    auto-player.ts  Heuristic reference: clear → gather-when-needed → escalating chain (harness + MCTS rollouts).
-    mcts.ts      The AI that drives in-game Autoplay: Monte Carlo Tree Search — clones the game and
-                 searches simulated futures, so it reasons per move and plays variedly, not by rules.
+    auto-player.ts  Heuristic reference: clear → gather-when-needed → escalating chain. Drives the
+                 harness, the in-game Autoplay, AND the Hints (so the coach and Autoplay never disagree).
+    mcts.ts      Monte Carlo Tree Search planner — kept for the harness/experiments (Autoplay now uses
+                 the heuristic so it matches the hints move-for-move).
     tuning.ts    Every playtest-deferred number, per difficulty, in one place.
     rng.ts       Deterministic seeded RNG.  index.ts  Public barrel — import from here.
   ui/         Vanilla-TS view: DOM board + one canvas FX overlay, driven by the engine's events.
@@ -78,7 +79,7 @@ into `public/games/inner-land-minesweeper/`; the page lives at `/games/inner-lan
 
 **Shippable.** Engine, UI, CLI, dev + embed hosts, and the balance harness are all in, and the game
 is embedded in the Tower Run Tracker at `/games/inner-land-minesweeper`. Over the headless sim the
-near-optimal bot wins ~54 / 54 / 52% (Easy / Standard / Hard) while hookless and blind play both win
+near-optimal bot wins ~47 / 53 / 55% (Easy / Standard / Hard) while hookless and blind play both win
 0%. Best times and a per-difficulty record persist locally (in-header 🏆 stats, 🗑 reset). The win
 handoff to a host leaderboard is via `ilm:result` (`GameResult`).
 

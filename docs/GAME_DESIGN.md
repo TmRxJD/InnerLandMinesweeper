@@ -116,16 +116,18 @@ A single tile at the exact centre, the only multi-hit enemy. Two defences make i
 it from the field** — you **must** hook a charged cluster in to deliver the kill. Hooks aren't a
 luxury here; they're the only delivery mechanism (the headless `noHook` player wins **0%**).
 
-**A regenerating shield.** The Boss has a **shield** (cyan layer on its bar) in front of its **HP**:
+**A regenerating charge shield.** The Boss has a **shield of `bossShieldCharges` (3) charges** — shown
+as pips on its bar, in front of its **HP**:
 
-- **Absorb-then-overflow.** A hit fills the shield first; only the **overflow past it** reaches HP. A
-  hit smaller than the shield deals **zero HP damage** (the shield must be down to hurt the Boss), but
-  a hit that *breaks* the shield carries its remainder through — nothing is wasted.
-- **It regrows when neglected.** If the Boss goes `bossRegenDelayMoves` moves without taking damage,
-  the shield heals `bossShieldRegenPerMove` per move back up to its max. So you **can't** clear the
-  whole board in peace and then one-shot a fresh Boss — hit it and *keep* hitting. Commit.
+- **A hit-counter, not an HP pool.** While it has charges, **any** blast that reaches the Boss knocks
+  off exactly **one** charge and deals **no** HP damage — no overflow, however big the blast. So it
+  takes **three separate hits** to strip the shield before a blast can touch HP. A single overkill
+  cluster can't one-shot the climax.
+- **It regrows when neglected.** Every `bossShieldRegenMoves` moves the Boss goes without being damaged
+  (5 / 4 / 3 by difficulty), it regains one charge, up to the max. So you **can't** clear the whole
+  board in peace and then break a fresh Boss — hit it and *keep* hitting. Commit.
 
-Its bar shows `HP + shield` and is always visible.
+Its bar shows HP (magenta, full-scale) plus the charge pips, and is always visible.
 
 ---
 
@@ -183,15 +185,15 @@ best medal) are kept in the browser (`ilm.best.*`, `ilm.stats`). The header has 
 Odd squares, so the Boss sits at a true centre. Every board is **seeded and deterministic** (same
 seed → same board), which powers the CLI, the harness, and any future daily board.
 
-| Difficulty | Size | Mines | Hooks | Boss HP + Shield | Stack cap | Start / Max charge | Par | Gold / Silver / Bronze |
-|---|---|---|---|---|---|---|---|---|
-| **Easy** (`gentle`) | 15×15 | 34 | 30 | 14 + 5 | 6 | 18 / 40 | 0:50 | ≤0:30 / ≤0:38 / ≤0:50 |
-| **Standard** | 17×17 | 42 | 45 | 30 + 9 | 7 | 22 / 48 | 1:06 | ≤0:44 / ≤0:54 / ≤1:06 |
-| **Hard** | 21×21 | 62 | 70 | 42 + 12 | 8 | 26 / 56 | 1:30 | ≤1:00 / ≤1:14 / ≤1:30 |
+| Difficulty | Size | Mines | Hooks | Boss HP | Shield (charges · regen) | Stack cap | Start / Max charge | Par | Gold / Silver / Bronze |
+|---|---|---|---|---|---|---|---|---|---|
+| **Easy** (`gentle`) | 15×15 | 34 | 30 | 7 | 3 · 1/5 moves | 6 | 18 / 40 | 0:50 | ≤0:30 / ≤0:38 / ≤0:50 |
+| **Standard** | 17×17 | 42 | 45 | 22 | 3 · 1/4 moves | 7 | 22 / 48 | 1:06 | ≤0:44 / ≤0:54 / ≤1:06 |
+| **Hard** | 21×21 | 62 | 70 | 34 | 3 · 1/3 moves | 8 | 26 / 56 | 1:30 | ≤1:00 / ≤1:14 / ≤1:30 |
 
 Shared across difficulties: charge does **not** regenerate (earned by detonating, `round(stack·0.5)`
 per mine); blast-radius cap is 3; the overlap boost is `⌊stack·0.5⌋`; shrapnel is `⌊stack·1⌋` capped at
-Chebyshev 3; the shield regrows after 4 idle moves; a tap costs 1 charge; mines are ~14% of the field.
+Chebyshev 3; the shield is 3 charges regaining one per 5/4/3 idle moves; a tap costs 1 charge; mines are ~14% of the field.
 
 Generation guarantees:
 
@@ -230,9 +232,9 @@ Generation guarantees:
   surplus clearing), gathers a squad to a Boss-adjacent rally point with directional hooks, and chains
   it in a greedy order. Two references bracket it: **`noHook`** (gathering off — measures how
   hook-dependent each difficulty is) and the **blind prober** (random-ish play — measures cheese).
-- **Autoplay (in-game)** — a **Monte Carlo Tree Search** planner (`mcts.ts`): each move it clones the
-  live game, simulates many futures, and lets the choice emerge from which turn out best. A wall-clock
-  budget per move keeps the demo responsive.
+- **Autoplay (in-game)** — plays the **same heuristic (`autoPlay`) the Hints use**, so watching Autoplay
+  is watching the coach's advice carried out move for move. (A Monte Carlo Tree Search planner, `mcts.ts`,
+  is kept for the harness/experiments but no longer drives the demo — the demo and the hint must agree.)
 
 The game is a **standalone repo**, embedded in the Tower Run Tracker via an iframe + `postMessage`
 handoff of the `GameResult` — the engine knows nothing about the host.
@@ -241,7 +243,7 @@ handoff of the `GameResult` — the engine knows nothing about the host.
 
 ## Balance status
 
-Reference bot (a near-optimal player) over the headless sim, n=200: **finishes ~54 / 54 / 52%**
+Reference bot (a near-optimal player) over the headless sim, n=200: **finishes ~47 / 53 / 55%**
 (Easy / Standard / Hard) — a challenging but fair share for strong play. The two guard rails hold:
 **`noHook` finishes 0%** everywhere (the moat makes hooks mandatory) and the **blind prober finishes
 0%** (no tap-cheese — the small charge budget stalls mindless play). No balance flags.

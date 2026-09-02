@@ -160,6 +160,7 @@ function predictChainDamage(near: TileView[], boss: Coord, snap: BoardSnapshot):
   const sim = near.map(m => ({ x: m.coord.x, y: m.coord.y, s: m.mineCharge ?? 1, alive: true }))
   const ch = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))
   let dmg = 0
+  let shield = snap.bossShield // charge shield: the first `shield` boss-hits strip a charge (0 HP dmg)
   for (;;) {
     let bi = -1
     let bs = -Infinity
@@ -181,7 +182,10 @@ function predictChainDamage(near: TileView[], boss: Coord, snap: BoardSnapshot):
     if (bi < 0) break
     const m = sim[bi]!
     const r = blastRadiusForStack(m.s, snap.blastRadiusCap)
-    if (ch(m, boss) <= r + 1) dmg += m.s
+    if (ch(m, boss) <= r + 1) {
+      if (shield > 0) shield-- // this hit is spent stripping a shield charge, not on HP
+      else dmg += m.s
+    }
     for (let j = 0; j < sim.length; j++) {
       const o = sim[j]!
       if (j === bi || !o.alive) continue
@@ -263,18 +267,19 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
   // is earned, not regenerated, so the mines must do the clearing). When the surplus runs out we STOP
   // clearing with mines and commit the remainder to the kill — that's what stops us over-spending the
   // pool and losing.
-  // The Boss hides behind a regenerating shield: a delivery must punch through shield AND HP, and the
-  // overflow carries through, so the effective health to plan against is just their sum (read live,
-  // since the shield regrows when neglected).
-  const bossEffHp = snap.bossHp + snap.bossShield
-  const need = Math.ceil(Math.sqrt(2 * bossEffHp)) + 2
+  // The Boss hides behind a regenerating CHARGE shield: the first `bossShield` boss-hits strip charges
+  // (no HP damage), then hits reach HP. So the DAMAGE to plan for is just its HP, but the squad needs a
+  // few EXTRA mines to spend stripping the shield first (one hit per charge).
+  const need = Math.ceil(Math.sqrt(2 * snap.bossHp)) + 2 + snap.bossShield
   const surplus = snap.minesRemaining - need
   const canHitBoss = (m: TileView): boolean =>
     cheb(m.coord, boss) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1
   // The squad = the armed mines nearest the Boss (the deliverables). Prefer spending FAR mines on the
   // field so the near ones stay cheap to hook in.
   const squad = [...mines].sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, need)
-  const lethal = squad.length > 0 && predictChainDamage(squad, boss, snap) >= bossEffHp
+  // predictChainDamage models the shield internally, so it returns HP damage AFTER the charges are
+  // stripped — lethal once that reaches the Boss's HP.
+  const lethal = squad.length > 0 && predictChainDamage(squad, boss, snap) >= snap.bossHp
 
   // === Boss delivery. Fire the squad the instant it's lethally gathered; otherwise, once we're out
   //     of surplus, commit to hooking it across the moat. While surplus remains we keep clearing (and

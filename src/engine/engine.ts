@@ -44,11 +44,12 @@ class Engine implements MinesweeperEngine {
   private hookCharges = 0
   private status: GameStatus = 'playing'
 
-  // Boss shield: a regenerating buffer in front of Boss HP. `movesSinceBossHit` drives regen; it
-  // resets whenever the Boss takes damage in an action, and once it passes the delay the shield
-  // regrows a little each move — so neglecting the Boss lets it heal back up.
-  private bossShield: number
-  private readonly bossShieldMax: number
+  // Boss shield: a regenerating CHARGE counter in front of Boss HP (not an HP pool). Each hit strips
+  // one charge (no HP damage) until it's empty; then hits reach HP. `movesSinceBossHit` counts moves
+  // with no Boss damage and hands back one charge every `bossShieldRegenMoves` — so neglecting the
+  // Boss lets its shield rebuild.
+  private bossShield: number // current charges
+  private readonly bossShieldMax: number // = bossShieldCharges
   private movesSinceBossHit = 0
   private bossHitThisAction = false
 
@@ -68,8 +69,8 @@ class Engine implements MinesweeperEngine {
     this.targetSeconds = opts.targetSeconds
     this.board = generateBoard(this.cfg, opts.seed)
     this.playerCharge = this.cfg.startingCharge
-    this.bossShieldMax = this.cfg.bossShield
-    this.bossShield = this.cfg.bossShield
+    this.bossShieldMax = this.cfg.bossShieldCharges
+    this.bossShield = this.cfg.bossShieldCharges
   }
 
   /** Deep, independent copy for hypothetical play (see the interface). Shares the immutable config
@@ -261,22 +262,18 @@ class Engine implements MinesweeperEngine {
    *  Boss as hit this action (so its regen counter resets). */
   private damageBoss(bossTile: Tile, amount: number, events: GameEvent[]): void {
     this.bossHitThisAction = true
-    // The shield GATES HP but doesn't waste damage: the hit fills the shield first, and only the
-    // OVERFLOW past it reaches HP. So a hit smaller than the shield deals zero HP damage (shield
-    // must be down to hurt the Boss), but a hit that breaks the shield carries its remainder through.
-    let dmg = amount
+    // Charge shield: while charges remain, ANY hit knocks off exactly one — no HP damage, no overflow
+    // (a huge blast still only strips a single charge). Once the shield is empty, hits reach HP. So it
+    // takes `bossShieldCharges` separate hits to break the shield before you can hurt the Boss.
     if (this.bossShield > 0) {
-      const absorbed = Math.min(this.bossShield, dmg)
       const from = this.bossShield
-      this.bossShield -= absorbed
-      dmg -= absorbed
+      this.bossShield -= 1
       events.push({ kind: 'bossShieldChanged', from, to: this.bossShield })
+      return
     }
-    if (dmg > 0) {
-      bossTile.hp -= dmg
-      if (bossTile.hp <= 0) this.destroyGroundTile(bossTile, events)
-      else this.damageTile(bossTile, events)
-    }
+    bossTile.hp -= amount
+    if (bossTile.hp <= 0) this.destroyGroundTile(bossTile, events)
+    else this.damageTile(bossTile, events)
   }
 
   /** Run once per real player action (from checkEnd). If the Boss took no damage this action, tick
@@ -288,13 +285,16 @@ class Engine implements MinesweeperEngine {
       return
     }
     this.movesSinceBossHit++
+    // Every `bossShieldRegenMoves` idle moves, hand back one charge (up to the max), then reset the
+    // counter — so a neglected Boss steadily rebuilds its shield.
     if (
-      this.movesSinceBossHit > this.cfg.bossRegenDelayMoves &&
+      this.movesSinceBossHit >= this.cfg.bossShieldRegenMoves &&
       this.bossShield < this.bossShieldMax &&
       this.bossHp() > 0
     ) {
       const from = this.bossShield
-      this.bossShield = Math.min(this.bossShieldMax, this.bossShield + this.cfg.bossShieldRegenPerMove)
+      this.bossShield += 1
+      this.movesSinceBossHit = 0
       events.push({ kind: 'bossShieldChanged', from, to: this.bossShield })
     }
   }
@@ -484,9 +484,9 @@ class Engine implements MinesweeperEngine {
     for (const t of this.board.tiles) if (t.isMine && t.state !== 'detonated') mines++
     const cap = this.cfg.stackCap
     const maxDeliverable = mines <= cap ? (mines * (mines + 1)) / 2 : (cap * (cap + 1)) / 2 + (mines - cap) * cap
-    // Must punch through the current shield AND the HP behind it. (Uses the shield as it stands now —
-    // striking immediately — rather than its regenerated max, so we never false-declare a loss.)
-    return maxDeliverable >= hp + this.bossShield
+    // The charge shield costs HITS, not damage — so the DAMAGE you must still deliver is just the HP.
+    // (A chain that can deal `hp` also carries enough detonations to strip the few shield charges.)
+    return maxDeliverable >= hp
   }
 
   private checkEnd(events: GameEvent[]): void {

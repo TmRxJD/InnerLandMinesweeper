@@ -12,7 +12,6 @@
 import { createEngine } from '../engine/engine'
 import { DIFFICULTIES } from '../engine/tuning'
 import { randomSeed } from '../engine/rng'
-import { chooseAction } from '../engine/mcts'
 import { autoPlay } from '../engine/auto-player'
 import type { BoardSnapshot, Coord, Difficulty, EventList, GameResult, MinesweeperEngine, Tier, TileView } from '../engine/types'
 import { FxLayer } from './fx-layer'
@@ -106,7 +105,7 @@ export class GameApp {
   private target: number | undefined
   private elBossBar!: HTMLElement
   private elBossFill!: HTMLElement
-  private elBossShield!: HTMLElement
+  private elBossShields!: HTMLElement
   private elBossHp!: HTMLElement
   private elCoach!: HTMLElement
   /** Pending long-press timer id for touch-triggered hook pulls. */
@@ -128,6 +127,9 @@ export class GameApp {
   private paused = false
 
   private demo = false
+  /** Set the moment Autoplay is used in the current game. An autoplayed game never counts toward
+   *  best times or the win record — the score has to be earned by the player. Reset on newGame. */
+  private demoUsedThisGame = false
   private demoTimers: ReturnType<typeof setTimeout>[] = []
   private cursor!: HTMLElement
   private hintsOn = false
@@ -161,7 +163,7 @@ export class GameApp {
     this.elMines = root.querySelector('[data-mines]')!
     this.elBossBar = root.querySelector('[data-bossbar]')!
     this.elBossFill = root.querySelector('[data-bossfill]')!
-    this.elBossShield = root.querySelector('[data-bossshield]')!
+    this.elBossShields = root.querySelector('[data-bossshields]')!
     this.elBossHp = root.querySelector('[data-bosshp]')!
     this.elCoach = root.querySelector('[data-coach]')!
     this.helpDialog = root.querySelector('[data-help-dialog]')!
@@ -221,8 +223,8 @@ export class GameApp {
           <span class="ilm-bossbar__label">Boss</span>
           <div class="ilm-bossbar__track">
             <div class="ilm-bossbar__fill" data-bossfill></div>
-            <div class="ilm-bossbar__shield" data-bossshield></div>
           </div>
+          <div class="ilm-bossbar__shields" data-bossshields aria-hidden="true"></div>
           <span class="ilm-bossbar__hp" data-bosshp></span>
         </div>
         <div class="ilm-controls">
@@ -295,9 +297,10 @@ export class GameApp {
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
             <div><b>The Boss</b> sits at the centre — the only multi-hit enemy, and <b>only mine blasts
               hurt it</b> (taps do nothing). It's guarded by a <b style="color:var(--energy)">shield</b>
-              (the cyan layer on its bar) that soaks damage before its HP — and <b>regrows if you leave
-              the Boss alone</b>, so you can't clear the whole board in peace and then finish it. Hook
-              charged mines in and commit: hit it hard and keep hitting, don't dawdle.</div>
+              of <b>3 charges</b> (the pips on its bar): every blast that reaches it knocks off <b>one
+              charge</b> no matter how big — so you must hit it <b>three times</b> to strip the shield
+              before any blast reaches its HP. Leave the Boss alone and a charge <b>regrows</b>, so
+              don't dawdle: hook charged mines in and hammer it without pausing.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--flag">✓</span>
@@ -521,6 +524,7 @@ export class GameApp {
     this.width = snap.width
     this.height = snap.height
     this.focusIndex = 0
+    this.demoUsedThisGame = false // fresh game — counts toward scores unless Autoplay is used
     this.hintTarget = null // the grid is rebuilt below; drop the stale highlight reference
     this.lastCoachSig = ''
     this.buildGrid(snap)
@@ -767,21 +771,14 @@ export class GameApp {
     }
     this.elHookCount.textContent = String(snap.hookCharges)
     this.elMines.textContent = String(snap.minesRemaining)
-    // Boss bar: the magenta bar is HP at FULL scale (100% when undamaged, so the Boss visibly
-    // *starts full*). The shield is a cyan sheen layered ON TOP of the HP's leading edge — it
-    // absorbs damage first (so it depletes before HP) and regrows when the Boss is neglected. The
-    // sheen is sized relative to HP-max, so a full shield covers the front slice of a full health bar.
+    // Boss bar: the magenta bar is HP at FULL scale (100% when undamaged, so the Boss visibly starts
+    // full). The shield is shown separately as a row of charge pips (filled = charge up) — you must
+    // strip them all before HP takes damage, and they regrow when the Boss is neglected.
     const hpPct = snap.bossMaxHp > 0 ? (snap.bossHp / snap.bossMaxHp) * 100 : 0
-    const sheenW = snap.bossMaxHp > 0 ? Math.min((snap.bossShield / snap.bossMaxHp) * 100, hpPct) : 0
-    const sheenLeft = Math.max(0, hpPct - sheenW)
-    // Always visible — the Boss is the whole point, so its bar is a permanent fixture (full at first).
     this.elBossBar.hidden = false
     this.elBossFill.style.setProperty('--boss-pct', `${hpPct}%`)
-    this.elBossShield.style.setProperty('--shield-left', `${sheenLeft}%`)
-    this.elBossShield.style.setProperty('--shield-pct', `${sheenW}%`)
-    this.elBossHp.textContent = snap.bossShieldMax > 0
-      ? `${snap.bossHp}+${snap.bossShield}`
-      : `${snap.bossHp}/${snap.bossMaxHp}`
+    this.renderBossShields(snap.bossShield, snap.bossShieldMax)
+    this.elBossHp.textContent = `${snap.bossHp}`
     this.updateCoach(snap)
   }
 
@@ -866,6 +863,23 @@ export class GameApp {
     if (idx !== null) this.tiles[idx]?.classList.add('hint-target')
   }
 
+  /** Render the Boss shield as a row of `max` charge pips; the first `charges` are lit. Pips are
+   *  built once (when the count changes) and only their lit state toggles after that. */
+  private renderBossShields(charges: number, max: number): void {
+    const el = this.elBossShields
+    if (el.childElementCount !== max) {
+      el.textContent = ''
+      for (let i = 0; i < max; i++) {
+        const pip = document.createElement('span')
+        pip.className = 'ilm-bossbar__pip'
+        el.appendChild(pip)
+      }
+    }
+    for (let i = 0; i < el.children.length; i++) {
+      (el.children[i] as HTMLElement).classList.toggle('is-charged', i < charges)
+    }
+  }
+
   private renderTile(el: HTMLButtonElement, t: TileView): void {
     el.dataset.tier = t.tier
     el.className = 'ilm-tile'
@@ -916,20 +930,28 @@ export class GameApp {
 
   private onEnd(result: GameResult, won: boolean): void {
     this.stopLoop()
-    this.recordGame(this.difficulty, won, won ? result.medal : 'none')
+    // An autoplayed game is a demo, not a score: it never touches the best time or the win record.
+    const counts = !this.demoUsedThisGame
+    if (counts) this.recordGame(this.difficulty, won, won ? result.medal : 'none')
     const title = this.banner.querySelector('.ilm-banner__title')!
     const detail = this.banner.querySelector('.ilm-banner__detail')!
     if (won) {
-      // A win that beats your best (or the first one) sets the new bar every later run counts down to.
-      const prevBest = this.bestTime(this.difficulty)
-      const isBest = prevBest === undefined || result.timeSeconds < prevBest
-      if (isBest) this.saveBestTime(this.difficulty, result.timeSeconds)
-      this.banner.classList.add('is-shown', 'win')
       const medal = result.medal === 'none' ? '' : `${result.medal.toUpperCase()} · `
-      title.textContent = isBest ? 'New best!' : 'Cleared'
-      detail.textContent = isBest
-        ? `${medal}${this.fmtTime(result.timeSeconds)}${prevBest !== undefined ? ` (beat ${this.fmtTime(prevBest)})` : ''} — the time to beat now`
-        : `${medal}${this.fmtTime(result.timeSeconds)} · best ${this.fmtTime(prevBest!)} · didn't beat it`
+      this.banner.classList.add('is-shown', 'win')
+      if (!counts) {
+        // Autoplay cleared it — show the time but make clear it doesn't count.
+        title.textContent = 'Autoplay cleared'
+        detail.textContent = `${medal}${this.fmtTime(result.timeSeconds)} — Autoplay runs don’t set a best or count in your record.`
+      } else {
+        // A win that beats your best (or the first one) sets the new bar every later run counts down to.
+        const prevBest = this.bestTime(this.difficulty)
+        const isBest = prevBest === undefined || result.timeSeconds < prevBest
+        if (isBest) this.saveBestTime(this.difficulty, result.timeSeconds)
+        title.textContent = isBest ? 'New best!' : 'Cleared'
+        detail.textContent = isBest
+          ? `${medal}${this.fmtTime(result.timeSeconds)}${prevBest !== undefined ? ` (beat ${this.fmtTime(prevBest)})` : ''} — the time to beat now`
+          : `${medal}${this.fmtTime(result.timeSeconds)} · best ${this.fmtTime(prevBest!)} · didn't beat it`
+      }
     } else {
       this.banner.classList.add('is-shown', 'lose')
       if (result.timedOut) {
@@ -981,6 +1003,7 @@ export class GameApp {
 
   private startDemo(): void {
     this.demo = true
+    this.demoUsedThisGame = true // this game is now autoplayed — it won't count toward scores/record
     this.demoStuck = 0
     this.root.classList.add('is-demo')
     this.root.querySelector('[data-demo]')!.textContent = 'Stop'
@@ -1027,12 +1050,15 @@ export class GameApp {
   /** One watchable move: glide the ghost cursor to the target, "click", apply, repeat. */
   private demoStep(): void {
     if (!this.demo) return
+    // Mark EVERY autoplayed game (incl. demo auto-restarts, which call newGame and reset the flag)
+    // so none of them count toward best times or the record.
+    this.demoUsedThisGame = true
     const snap = this.engine.snapshot()
     if (snap.status !== 'playing') return this.demoRestart(2400) // won/lost — next board
-    // The demo is driven by the MCTS planner, not the heuristic — it searches from the live position
-    // each move. A wall-clock budget keeps the thinking snappy (hidden under the cursor glide) so the
-    // board stays responsive; the choice still emerges from simulated futures, so it plays variedly.
-    const action = chooseAction(this.engine, { timeBudgetMs: 90 })
+    // The demo plays the SAME move the Hints point at — both come from autoPlay(snap) — so watching
+    // Autoplay is watching the coach's advice carried out, tile by tile. (The MCTS planner is still
+    // in the repo for the harness/experiments, but the demo and the hint must never disagree.)
+    const action = autoPlay(snap)
     if (!action) return this.demoRestart(1200) // no move — next board
 
     const sigBefore = this.progressSig(snap)

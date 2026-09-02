@@ -296,9 +296,9 @@ describe('boss shield', () => {
 
   it('starts full and is exposed in the snapshot', () => {
     const s = createEngine({ difficulty: DIFF, seed: 'shield-init' }).snapshot()
-    expect(s.bossShield).toBe(cfg.bossShield)
-    expect(s.bossShieldMax).toBe(cfg.bossShield)
-    expect(cfg.bossShield).toBeGreaterThan(0)
+    expect(s.bossShield).toBe(cfg.bossShieldCharges)
+    expect(s.bossShieldMax).toBe(cfg.bossShieldCharges)
+    expect(cfg.bossShieldCharges).toBeGreaterThan(0)
   })
 
   /** Park an armed mine at Chebyshev 2 of the Boss (via hooks) so a detonation reaches it. Returns
@@ -327,7 +327,7 @@ describe('boss shield', () => {
       const { engine, at } = parked
       const hp0 = engine.snapshot().bossHp
       const sh0 = engine.snapshot().bossShield
-      engine.detonate(at) // a stack-1 hit: absorbed by the shield, HP untouched
+      engine.detonate(at) // a hit strips ONE shield charge, HP untouched
       expect(engine.snapshot().bossShield).toBe(sh0 - 1)
       expect(engine.snapshot().bossHp).toBe(hp0) // shield took it — HP is safe behind it
 
@@ -336,12 +336,12 @@ describe('boss shield', () => {
       const far = truth(`shield-${i}`).tiles.filter(t => !t.isMine && t.tier !== 'boss' && chb(t.x, t.y) > 3)
       const shieldLow = engine.snapshot().bossShield
       let regrew = false
-      for (const t of far.slice(0, cfg.bossRegenDelayMoves + 4)) {
+      for (const t of far.slice(0, cfg.bossShieldRegenMoves + 4)) {
         engine.reveal({ x: t.x, y: t.y })
         if (engine.snapshot().bossShield > shieldLow) { regrew = true; break }
       }
       expect(regrew).toBe(true) // neglect let the shield heal back up
-      expect(engine.snapshot().bossShield).toBeLessThanOrEqual(cfg.bossShield) // never past its max
+      expect(engine.snapshot().bossShield).toBeLessThanOrEqual(cfg.bossShieldCharges) // never past its max
       return
     }
     throw new Error('no seed parked a mine at the Boss for the shield test')
