@@ -35,6 +35,8 @@ class Engine implements MinesweeperEngine {
   private readonly difficulty: Difficulty
   private readonly seed: string
   private readonly revealHooks: boolean
+  private readonly targetSeconds: number | undefined
+  private timedOut = false
 
   private playerCharge: number
   private timeElapsed = 0
@@ -54,6 +56,7 @@ class Engine implements MinesweeperEngine {
     this.difficulty = opts.difficulty
     this.seed = opts.seed
     this.revealHooks = opts.revealHooks ?? false
+    this.targetSeconds = opts.targetSeconds
     this.board = generateBoard(this.cfg, opts.seed)
     this.playerCharge = this.cfg.startingCharge
   }
@@ -179,8 +182,12 @@ class Engine implements MinesweeperEngine {
         this.setPlayerCharge(this.playerCharge + whole, events)
       }
     }
-    // The clock only counts up — it is the score, never a loss condition.
     this.timeElapsed += deltaSeconds
+    // Speedrun countdown: if you can't clear before your best time, the run is lost ('too slow').
+    if (this.targetSeconds !== undefined && this.timeElapsed >= this.targetSeconds) {
+      this.timedOut = true
+      this.endGame('lost', events)
+    }
     return events
   }
 
@@ -418,6 +425,7 @@ class Engine implements MinesweeperEngine {
       seed: this.seed,
       difficulty: this.difficulty,
       outcome,
+      timedOut: this.timedOut,
       // Score rewards speed on a win; a lost run scores nothing.
       score: outcome === 'won' ? Math.max(0, Math.round(parLeft * this.cfg.scoreDifficultyMultiplier)) : 0,
       timeSeconds,

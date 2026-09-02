@@ -393,14 +393,24 @@ describe('blast radius scales with stack (capped)', () => {
   })
 })
 
-describe('no loss; win on full clear', () => {
-  it('ticking far past par never loses', () => {
+describe('speedrun clock', () => {
+  it('with no target, the clock just counts up and never loses on time', () => {
     const engine = createEngine({ difficulty: DIFF, seed: 'noloss' })
     const events = engine.tick(cfg.parSeconds * 3)
-    // The clock only counts up (and may regen charge) — it never ends the game.
-    expect(events.some(e => e.kind === 'gameWon')).toBe(false)
+    expect(events.some(e => e.kind === 'gameWon' || e.kind === 'gameLost')).toBe(false)
     expect(engine.snapshot().status).toBe('playing')
     expect(engine.snapshot().timeElapsed).toBeGreaterThan(cfg.parSeconds)
+  })
+
+  it('with a target (your best time), reaching it loses the run — timedOut', () => {
+    const engine = createEngine({ difficulty: DIFF, seed: 'slow', targetSeconds: 10 })
+    expect(engine.tick(6).some(e => e.kind === 'gameLost')).toBe(false) // still time on the clock
+    expect(engine.snapshot().status).toBe('playing')
+    const events = engine.tick(5) // now past 10s
+    expect(events.some(e => e.kind === 'gameLost')).toBe(true)
+    const r = engine.result()
+    expect(r?.outcome).toBe('lost')
+    expect(r?.timedOut).toBe(true)
   })
 
   it('the reference bot can clear the board and kill the blast-only boss (winnable with skill)', () => {

@@ -152,8 +152,12 @@ export type EventList = readonly GameEvent[]
 export interface GameResult {
   readonly seed: string
   readonly difficulty: Difficulty
-  /** 'won' = field cleared and Boss dead; 'lost' = ran the mine pool dry with the Boss still alive. */
+  /** 'won' = field cleared and Boss dead; 'lost' = ran the mine pool dry, OR the countdown to your
+   *  best time hit zero (see `timedOut`). */
   readonly outcome: 'won' | 'lost'
+  /** True when the loss was the speedrun clock running out (couldn't beat your best time) rather than
+   *  running out of mines. */
+  readonly timedOut: boolean
   /** Higher is better: how much of par you beat, scaled by difficulty. */
   readonly score: number
   /** The real metric — clear time in whole seconds (lower is better). */
@@ -177,6 +181,10 @@ export interface EngineOptions {
   /** DEV/testing only: when true, covered Magnetic Hook tiles expose `isHook` in snapshots so
    *  a debug view can mark them. Off in normal play — hooks are a discovery, not a signpost. */
   readonly revealHooks?: boolean
+  /** Speedrun target: the time (seconds) to beat — your previous best. The clock counts DOWN from
+   *  it; reach it before winning and the run is lost ('too slow'). Omit for a free, untimed run
+   *  (e.g. your first game, which just sets the baseline). */
+  readonly targetSeconds?: number
 }
 
 /**

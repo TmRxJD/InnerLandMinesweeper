@@ -87,8 +87,11 @@ export class GameApp {
   private elCharge!: HTMLElement
   private elChargeFill!: HTMLElement
   private elTime!: HTMLElement
+  private elTimeStat!: HTMLElement
   private elHookCount!: HTMLElement
   private elMines!: HTMLElement
+  /** The time to beat this run (your best on this difficulty), or undefined for a free baseline run. */
+  private target: number | undefined
   private elBossBar!: HTMLElement
   private elBossFill!: HTMLElement
   private elBossHp!: HTMLElement
@@ -136,6 +139,7 @@ export class GameApp {
     this.elCharge = root.querySelector('[data-charge]')!
     this.elChargeFill = root.querySelector('.ilm-chargebar__fill')!
     this.elTime = root.querySelector('[data-time]')!
+    this.elTimeStat = root.querySelector('.ilm-stat--time')!
     this.elHookCount = root.querySelector('[data-hookcount]')!
     this.elMines = root.querySelector('[data-mines]')!
     this.elBossBar = root.querySelector('[data-bossbar]')!
@@ -339,10 +343,38 @@ export class GameApp {
 
   // -- lifecycle ---------------------------------------------------------
 
+  /** Your best clear time on a difficulty (whole seconds), from local storage, or undefined. */
+  private bestTime(difficulty: Difficulty): number | undefined {
+    try {
+      const v = globalThis.localStorage?.getItem(`ilm.best.${difficulty}`)
+      const n = v == null ? NaN : Number(v)
+      return Number.isFinite(n) && n > 0 ? n : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  private saveBestTime(difficulty: Difficulty, seconds: number): void {
+    try {
+      globalThis.localStorage?.setItem(`ilm.best.${difficulty}`, String(Math.round(seconds)))
+    } catch {
+      /* private mode / no storage — a session-only best is fine */
+    }
+  }
+
   newGame(difficulty: Difficulty, seed: string): void {
     this.difficulty = difficulty
     this.seed = seed
-    this.engine = createEngine({ difficulty, seed, now: () => performance.now() / 1000, revealHooks: REVEAL_HOOKS })
+    // Speedrun: the clock counts DOWN from your best time on this difficulty. Your first game has no
+    // best, so it runs free (untimed) and sets the baseline; every game after must beat it.
+    this.target = this.bestTime(difficulty)
+    this.engine = createEngine({
+      difficulty,
+      seed,
+      now: () => performance.now() / 1000,
+      revealHooks: REVEAL_HOOKS,
+      ...(this.target !== undefined ? { targetSeconds: this.target } : {}),
+    })
     const snap = this.engine.snapshot()
     this.width = snap.width
     this.height = snap.height
@@ -564,7 +596,15 @@ export class GameApp {
     this.elCharge.textContent = `${snap.playerCharge}/${maxCharge}`
     const pct = Math.max(0, Math.min(100, (snap.playerCharge / maxCharge) * 100))
     this.elChargeFill.style.setProperty('--charge-pct', `${pct}%`)
-    this.elTime.textContent = this.fmtTime(snap.timeElapsed)
+    // With a best to beat, the clock counts DOWN from it (turns red near zero); the baseline run
+    // counts up.
+    if (this.target !== undefined) {
+      const remaining = Math.max(0, this.target - snap.timeElapsed)
+      this.elTime.textContent = this.fmtTime(remaining)
+      this.elTimeStat.classList.toggle('is-low', remaining <= 5)
+    } else {
+      this.elTime.textContent = this.fmtTime(snap.timeElapsed)
+    }
     this.elHookCount.textContent = String(snap.hookCharges)
     this.elMines.textContent = String(snap.minesRemaining)
     // Boss bar: show once the boss has taken a hit (it's covered/full at first).
@@ -651,17 +691,28 @@ export class GameApp {
 
   private onEnd(result: GameResult, won: boolean): void {
     this.stopLoop()
-    this.banner.classList.add('is-shown', won ? 'win' : 'lose')
+    const title = this.banner.querySelector('.ilm-banner__title')!
+    const detail = this.banner.querySelector('.ilm-banner__detail')!
     if (won) {
+      // A win that beats your best (or the first one) sets the new bar every later run counts down to.
+      const prevBest = this.bestTime(this.difficulty)
+      const isBest = prevBest === undefined || result.timeSeconds < prevBest
+      if (isBest) this.saveBestTime(this.difficulty, result.timeSeconds)
+      this.banner.classList.add('is-shown', 'win')
       const medal = result.medal === 'none' ? '' : `${result.medal.toUpperCase()} · `
-      this.banner.querySelector('.ilm-banner__title')!.textContent = 'Cleared'
-      this.banner.querySelector('.ilm-banner__detail')!.textContent =
-        `${medal}${this.fmtTime(result.timeSeconds)} · ${result.detonations} blasts · ${result.moves} moves`
+      title.textContent = isBest ? 'New best!' : 'Cleared'
+      detail.textContent = isBest
+        ? `${medal}${this.fmtTime(result.timeSeconds)}${prevBest !== undefined ? ` (beat ${this.fmtTime(prevBest)})` : ''} — the time to beat now`
+        : `${medal}${this.fmtTime(result.timeSeconds)} · best ${this.fmtTime(prevBest!)} · didn't beat it`
     } else {
-      // Ran the mine pool dry with the Boss still alive.
-      this.banner.querySelector('.ilm-banner__title')!.textContent = 'Out of mines'
-      this.banner.querySelector('.ilm-banner__detail')!.textContent =
-        `The Boss survives — too many mines spent clearing. ${result.detonations} blasts · ${result.moves} moves`
+      this.banner.classList.add('is-shown', 'lose')
+      if (result.timedOut) {
+        title.textContent = 'Too slow'
+        detail.textContent = `Ran out of time to beat your best (${this.fmtTime(this.target ?? result.timeSeconds)}). Restart and go faster.`
+      } else {
+        title.textContent = 'Out of mines'
+        detail.textContent = `The Boss survives — too many mines spent clearing. ${result.detonations} blasts · ${result.moves} moves`
+      }
     }
     this.onResult?.(result)
   }
