@@ -83,12 +83,12 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
     bossHp: 12,
-    parSeconds: 116,
-    goldSeconds: 88,
-    silverSeconds: 100,
-    bronzeSeconds: 116,
+    parSeconds: 50,
+    goldSeconds: 30,
+    silverSeconds: 38,
+    bronzeSeconds: 50,
     startingCharge: 40, // fixed tap budget (no refund); cascade does the clearing
-    maxPlayerCharge: 999, // charge only decreases now, so the cap never binds
+    maxPlayerCharge: 40, // = startingCharge: charge only decreases (no refund), so this is the whole budget
     chargeRegenPerSecond: 0, // earned, not regenerated: detonate mines to fund tapping
     stackCap: 6,
     blastRadiusCap: 3,
@@ -106,12 +106,12 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
     bossHp: 20,
-    parSeconds: 164,
-    goldSeconds: 115,
-    silverSeconds: 138,
-    bronzeSeconds: 164,
+    parSeconds: 66,
+    goldSeconds: 44,
+    silverSeconds: 54,
+    bronzeSeconds: 66,
     startingCharge: 48, // fixed tap budget (no refund); cascade does the clearing
-    maxPlayerCharge: 999, // charge only decreases now, so the cap never binds
+    maxPlayerCharge: 48, // = startingCharge: charge only decreases (no refund), so this is the whole budget
     chargeRegenPerSecond: 0,
     stackCap: 7,
     blastRadiusCap: 3,
@@ -129,12 +129,12 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
     bossHp: 28,
-    parSeconds: 195,
-    goldSeconds: 145,
-    silverSeconds: 168,
-    bronzeSeconds: 195,
+    parSeconds: 90,
+    goldSeconds: 60,
+    silverSeconds: 74,
+    bronzeSeconds: 90,
     startingCharge: 56, // fixed tap budget (no refund); cascade does the clearing
-    maxPlayerCharge: 999, // charge only decreases now, so the cap never binds
+    maxPlayerCharge: 56, // = startingCharge: charge only decreases (no refund), so this is the whole budget
     chargeRegenPerSecond: 0,
     stackCap: 8,
     blastRadiusCap: 3,
