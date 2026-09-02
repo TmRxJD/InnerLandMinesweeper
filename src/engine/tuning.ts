@@ -121,7 +121,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     gatherRadius: 4,
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
-    shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
+    shrapnelMaxReach: 2, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
     chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 1,
   },
@@ -147,7 +147,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     gatherRadius: 4,
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
-    shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
+    shrapnelMaxReach: 2, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
     chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 1.6,
   },
@@ -173,7 +173,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     gatherRadius: 5,
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
-    shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
+    shrapnelMaxReach: 2, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
     chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 2.4,
   },

@@ -401,9 +401,6 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
   const boss = bossCoord(snap)
   const mines = armedMines(snap)
   const bossAlive = snap.bossHp > 0
-  // Reserve enough ordnance to FINISH the Boss with margin: enough triangular stack to deal its HP,
-  // one hit per shield charge, plus a couple spare — running one mine short (the classic "Boss stuck
-  // at 2 HP while the shield regrows" failure) loses the run.
   const need = Math.ceil(Math.sqrt(2 * snap.bossHp)) + snap.bossShield + 3
   const surplus = snap.minesRemaining - need
   const squad = [...mines].sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, need)
@@ -412,9 +409,8 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
     cheb(m.coord, boss) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1
   const lethal = squad.length > 0 && predictChainDamage(squad, boss, snap) >= snap.bossHp
 
-  // 1. Boss campaign — FINISH the Boss, never abandon it half-dead. Deliver the chain when it's lethally
-  //    gathered; otherwise keep hooking the squad across the gap until it IS lethal. This runs ahead of
-  //    field clearing so the kill isn't left at 2 HP while the shield regrows and the run stalls.
+  // 1. Boss campaign — deliver the chain when the squad is lethally gathered; otherwise, once the field
+  //    surplus is spent, hook the killers across the gap to finish it.
   if (bossAlive && squad.length > 0) {
     if (lethal) {
       const starter = chainStarter(squad, boss, snap)
@@ -424,7 +420,7 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
         if (g) return g
       }
     } else if (surplus <= 1 && snap.hookCharges >= 1) {
-      const g = gatherMove(squad, boss, snap) // committed (field spent) — hook the killers in to finish
+      const g = gatherMove(squad, boss, snap)
       if (g) return g
     }
   }
