@@ -210,6 +210,12 @@
   font-weight: 600;
 }
 .ilm-btn--primary:hover { border-color: var(--energy); }
+.ilm-btn--danger {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--tile-edge));
+  color: var(--danger);
+  font-weight: 600;
+}
+.ilm-btn--danger:hover { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 
 /* ---- Coach line (live "what to do" hint, off unless Hints is toggled) ---- */
 
@@ -285,6 +291,35 @@
 .ilm-help__icon--flag { color: var(--energy); }
 .ilm-help__keys { margin: 16px 0 18px; font-size: 12px; color: var(--ink-dim); }
 .ilm-help__got { width: 100%; }
+.ilm-help__card--narrow { max-width: 360px; }
+
+/* Header action cluster: the icon buttons (stats / reset / help) sit together, right-aligned. */
+.ilm-header__actions { display: flex; align-items: center; gap: 8px; }
+
+/* Reset-confirm actions row. */
+.ilm-modal__actions { display: flex; gap: 10px; margin-top: 6px; }
+.ilm-modal__actions .ilm-btn { flex: 1 1 0; }
+
+/* High-scores table. */
+.ilm-stats-table { width: 100%; border-collapse: collapse; margin: 4px 0 18px; font-size: 13px; }
+.ilm-stats-table th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 700;
+  padding: 0 8px 6px 0;
+  border-bottom: 1px solid var(--tile-edge);
+}
+.ilm-stats-table td {
+  padding: 8px 8px 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--tile-edge) 45%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.ilm-stats-table tbody tr:last-child td { border-bottom: none; }
+.ilm-stats-table td:first-child { color: var(--ink); font-weight: 600; }
+.ilm-stats-table th:not(:first-child), .ilm-stats-table td:not(:first-child) { text-align: right; }
 .ilm-select {
   appearance: none;
   border: 1px solid var(--tile-edge);

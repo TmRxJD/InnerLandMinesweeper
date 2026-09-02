@@ -45,6 +45,17 @@ const ENEMY_SETS: Record<Tier, readonly string[]> = {
   boss: [enemyBoss],
 }
 
+const DIFFICULTY_LABELS: Record<Difficulty, string> = { gentle: 'Easy', standard: 'Standard', hard: 'Hard' }
+const ALL_DIFFICULTIES: Difficulty[] = ['gentle', 'standard', 'hard']
+const MEDAL_RANK: Record<string, number> = { none: 0, bronze: 1, silver: 2, gold: 3 }
+
+/** Per-difficulty local record. `medal` is the best medal ever earned on that difficulty. */
+interface DifficultyStat {
+  played: number
+  won: number
+  medal: string
+}
+
 const TIER_LABEL: Record<Tier, string> = {
   common: 'Common', advanced: 'Advanced', elite: 'Elite', fleet: 'Fleet', boss: 'Boss',
 }
@@ -104,6 +115,8 @@ export class GameApp {
   /** The armed mine a pointer went down on — dragging it to a neighbour hooks it that way. */
   private dragStart: { coord: Coord; armed: boolean } | null = null
   private helpDialog!: HTMLElement
+  private statsDialog!: HTMLElement
+  private resetDialog!: HTMLElement
 
   private width = 0
   private height = 0
@@ -149,6 +162,8 @@ export class GameApp {
     this.elBossHp = root.querySelector('[data-bosshp]')!
     this.elCoach = root.querySelector('[data-coach]')!
     this.helpDialog = root.querySelector('[data-help-dialog]')!
+    this.statsDialog = root.querySelector('[data-stats-dialog]')!
+    this.resetDialog = root.querySelector('[data-reset-dialog]')!
 
     this.wireControls()
     this.fx = new FxLayer(this.fxCanvas, {
@@ -163,9 +178,8 @@ export class GameApp {
   // -- markup ------------------------------------------------------------
 
   private chrome(): string {
-    const label: Record<Difficulty, string> = { gentle: 'Easy', standard: 'Standard', hard: 'Hard' }
     const opts = (Object.keys(DIFFICULTIES) as Difficulty[])
-      .map(d => `<option value="${d}">${label[d]}</option>`)
+      .map(d => `<option value="${d}">${DIFFICULTY_LABELS[d]}</option>`)
       .join('')
     return `
       <header class="ilm-header">
@@ -173,7 +187,11 @@ export class GameApp {
           <span class="ilm-title__mark" style="--sprite:url(${mineUrl})" aria-hidden="true"></span>
           <span class="ilm-title__text">Inner Land Minesweeper</span>
         </div>
-        <button class="ilm-iconbtn" data-help aria-label="How to play" title="How to play">?</button>
+        <div class="ilm-header__actions">
+          <button class="ilm-iconbtn" data-stats aria-label="High scores and stats" title="High scores &amp; stats">🏆</button>
+          <button class="ilm-iconbtn" data-reset aria-label="Reset progress" title="Reset progress">🗑</button>
+          <button class="ilm-iconbtn" data-help aria-label="How to play" title="How to play">?</button>
+        </div>
       </header>
 
       <div class="ilm-hud">
@@ -292,6 +310,29 @@ export class GameApp {
           <button class="ilm-btn ilm-btn--primary ilm-help__got" data-help-close>Got it</button>
         </div>
       </div>
+
+      <div class="ilm-help" data-stats-dialog hidden role="dialog" aria-modal="true" aria-label="High scores and stats">
+        <div class="ilm-help__card">
+          <button class="ilm-iconbtn ilm-help__close" data-dialog-close aria-label="Close">×</button>
+          <h2 class="ilm-help__title">High scores</h2>
+          <p class="ilm-help__lead">Your best clear time and record on each difficulty. Beat your best time
+            to set a new one — every run after counts down from it.</p>
+          <div data-stats-body></div>
+          <button class="ilm-btn ilm-btn--primary ilm-help__got" data-dialog-close>Close</button>
+        </div>
+      </div>
+
+      <div class="ilm-help" data-reset-dialog hidden role="dialog" aria-modal="true" aria-label="Reset progress">
+        <div class="ilm-help__card ilm-help__card--narrow">
+          <h2 class="ilm-help__title">Reset progress?</h2>
+          <p class="ilm-help__lead">This clears your best times and stats on <b>every</b> difficulty.
+            It can't be undone.</p>
+          <div class="ilm-modal__actions">
+            <button class="ilm-btn" data-dialog-close>Cancel</button>
+            <button class="ilm-btn ilm-btn--danger" data-reset-confirm>Reset everything</button>
+          </div>
+        </div>
+      </div>
     `
   }
 
@@ -303,13 +344,24 @@ export class GameApp {
     this.root.querySelector('[data-again]')!.addEventListener('click', () => { this.stopDemo(); this.newGame(this.difficulty, randomSeed()) })
     this.root.querySelector('[data-demo]')!.addEventListener('click', () => this.toggleDemo())
     this.root.querySelector('[data-hints]')!.addEventListener('click', () => this.toggleHints())
-    this.root.querySelector('[data-help]')!.addEventListener('click', () => this.openHelp())
-    this.root.querySelectorAll('[data-help-close]').forEach(el => {
-      el.addEventListener('click', () => this.closeHelp())
+    this.root.querySelector('[data-help]')!.addEventListener('click', () => this.openDialog(this.helpDialog))
+    this.root.querySelector('[data-stats]')!.addEventListener('click', () => { this.renderStats(); this.openDialog(this.statsDialog) })
+    this.root.querySelector('[data-reset]')!.addEventListener('click', () => this.openDialog(this.resetDialog))
+    this.root.querySelector('[data-reset-confirm]')!.addEventListener('click', () => {
+      this.resetProgress()
+      this.renderStats() // reflect the wipe if the stats dialog is opened next
+      this.closeDialog(this.resetDialog)
     })
-    this.helpDialog.addEventListener('click', e => {
-      if (e.target === this.helpDialog) this.closeHelp() // backdrop click
+    // A close control closes whichever dialog contains it; a backdrop click closes that dialog.
+    this.root.querySelectorAll('[data-help-close], [data-dialog-close]').forEach(el => {
+      el.addEventListener('click', () => {
+        const dlg = (el as HTMLElement).closest<HTMLElement>('.ilm-help')
+        if (dlg) this.closeDialog(dlg)
+      })
     })
+    for (const dlg of [this.helpDialog, this.statsDialog, this.resetDialog]) {
+      dlg.addEventListener('click', e => { if (e.target === dlg) this.closeDialog(dlg) }) // backdrop
+    }
     this.board.addEventListener('keydown', e => this.onKey(e as KeyboardEvent))
     // Complete a drag-to-hook: released on a neighbour of the armed mine we grabbed → pull it there.
     this.board.addEventListener('pointerup', e => {
@@ -338,16 +390,18 @@ export class GameApp {
     this.updateCoach(this.engine.snapshot())
   }
 
-  private openHelp(): void {
-    this.helpDialog.hidden = false
-    this.root.querySelector<HTMLElement>('[data-help-close]')?.focus()
+  private openDialog(dlg: HTMLElement): void {
+    // Only one modal at a time.
+    for (const d of [this.helpDialog, this.statsDialog, this.resetDialog]) d.hidden = d !== dlg
+    dlg.querySelector<HTMLElement>('[data-help-close], [data-dialog-close], .ilm-btn')?.focus()
   }
-  private closeHelp(): void {
-    this.helpDialog.hidden = true
+  private closeDialog(dlg: HTMLElement): void {
+    dlg.hidden = true
     this.root.querySelector<HTMLElement>('[data-help]')?.focus()
   }
   private readonly onGlobalKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && !this.helpDialog.hidden) this.closeHelp()
+    if (e.key !== 'Escape') return
+    for (const d of [this.helpDialog, this.statsDialog, this.resetDialog]) if (!d.hidden) this.closeDialog(d)
   }
 
   // -- lifecycle ---------------------------------------------------------
@@ -368,6 +422,81 @@ export class GameApp {
       globalThis.localStorage?.setItem(`ilm.best.${difficulty}`, String(Math.round(seconds)))
     } catch {
       /* private mode / no storage — a session-only best is fine */
+    }
+  }
+
+  /** Per-difficulty play record (games/wins/best medal), from local storage. Always returns a full
+   *  map so callers don't guard for missing keys. */
+  private loadStats(): Record<Difficulty, DifficultyStat> {
+    const out: Record<Difficulty, DifficultyStat> = {
+      gentle: { played: 0, won: 0, medal: 'none' },
+      standard: { played: 0, won: 0, medal: 'none' },
+      hard: { played: 0, won: 0, medal: 'none' },
+    }
+    try {
+      const raw = globalThis.localStorage?.getItem('ilm.stats')
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<Record<Difficulty, Partial<DifficultyStat>>>
+        for (const d of ALL_DIFFICULTIES) {
+          const s = parsed[d]
+          if (s) out[d] = { played: s.played ?? 0, won: s.won ?? 0, medal: s.medal ?? 'none' }
+        }
+      }
+    } catch {
+      /* corrupt/absent — start fresh */
+    }
+    return out
+  }
+
+  /** Fold one finished game into the local record. */
+  private recordGame(difficulty: Difficulty, won: boolean, medal: string): void {
+    try {
+      const stats = this.loadStats()
+      const s = stats[difficulty]
+      s.played += 1
+      if (won) {
+        s.won += 1
+        if ((MEDAL_RANK[medal] ?? 0) > (MEDAL_RANK[s.medal] ?? 0)) s.medal = medal
+      }
+      globalThis.localStorage?.setItem('ilm.stats', JSON.stringify(stats))
+    } catch {
+      /* no storage — a session without a saved record is fine */
+    }
+  }
+
+  /** Wipe every best time and the play record on all difficulties. */
+  private resetProgress(): void {
+    try {
+      for (const d of ALL_DIFFICULTIES) globalThis.localStorage?.removeItem(`ilm.best.${d}`)
+      globalThis.localStorage?.removeItem('ilm.stats')
+    } catch {
+      /* nothing to clear */
+    }
+    this.target = this.bestTime(this.difficulty) // now undefined — the live run becomes a free baseline
+  }
+
+  /** Populate the stats dialog with a per-difficulty table of best time, best medal, and win record. */
+  private renderStats(): void {
+    const stats = this.loadStats()
+    const rows = ALL_DIFFICULTIES.map(d => {
+      const best = this.bestTime(d)
+      const s = stats[d]
+      const winPct = s.played ? `${Math.round((s.won / s.played) * 100)}%` : '—'
+      const medal = s.medal === 'none' ? '—' : s.medal[0]!.toUpperCase() + s.medal.slice(1)
+      return `<tr>
+        <td>${DIFFICULTY_LABELS[d]}</td>
+        <td>${best !== undefined ? this.fmtTime(best) : '—'}</td>
+        <td>${medal}</td>
+        <td>${s.won}/${s.played}</td>
+        <td>${winPct}</td>
+      </tr>`
+    }).join('')
+    const body = this.root.querySelector('[data-stats-body]')
+    if (body) {
+      body.innerHTML = `<table class="ilm-stats-table">
+        <thead><tr><th>Difficulty</th><th>Best</th><th>Medal</th><th>Cleared</th><th>Win rate</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`
     }
   }
 
@@ -724,6 +853,7 @@ export class GameApp {
 
   private onEnd(result: GameResult, won: boolean): void {
     this.stopLoop()
+    this.recordGame(this.difficulty, won, won ? result.medal : 'none')
     const title = this.banner.querySelector('.ilm-banner__title')!
     const detail = this.banner.querySelector('.ilm-banner__detail')!
     if (won) {

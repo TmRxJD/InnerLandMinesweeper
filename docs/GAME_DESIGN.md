@@ -1,22 +1,25 @@
 # Inner Land Minesweeper — Game Design Overview
 
-**Status:** playable. This document describes the game **as it currently plays**. The numbers in
-the tables are the live tuning values (`src/engine/tuning.ts`) — tuned, not frozen.
+**Status:** playable / shippable. This document describes the game **as it currently plays**. The
+numbers in the tables are the live tuning values (`src/engine/tuning.ts`) — tuned, not frozen.
 
 ---
 
 ## The pitch
 
-Minesweeper × *The Tower*'s Inner Land Mines × a dash of Bomberman.
+Minesweeper × *The Tower*'s Inner Land Mines × a roguelike speedrun.
 
-> **Finding a mine is good — mines are your weapons. Clear the field from a corner inward, build
-> big stacks on the mines nearest the centre, and unleash them on the Boss. The clock is your
-> score, not your executioner.**
+> **Finding a mine is good — mines are your weapons. But they're one scarce pool that has to do two
+> jobs: clear the field *and* kill the Boss. Spend too many clearing and the Boss outlives your ammo.
+> And it's a race against yourself: after your first clear, the clock counts *down* from your best
+> time — beat it or the run is lost.**
 
-Every tile is a 1-HP enemy that vaporises on any hit — *except* the Boss at the centre, the one
-enemy with real HP, which **only mine blasts can hurt**. So the loop is a fast outward→inward race:
-sweep the field to find your mines, chain detonations to clear ground and pump the inner mines'
-stacks, and deliver those stacks to the Boss before the clock climbs. Finish fast for a medal.
+Every tile is a 1-HP enemy that vaporises on any hit — *except* the Boss at the centre, the one enemy
+with real HP, which **only mine blasts can hurt** and which hides behind a regenerating shield. The
+loop is a fast outward→inward race under real pressure: sweep the field to find your mines, chain
+detonations to clear ground and pump your mines' stacks, hook a cluster to the moated Boss, and break
+it — all before the countdown hits zero. Two ways to lose, one way to win, and every game has to be
+faster than the last.
 
 ---
 
@@ -38,122 +41,140 @@ You don't need to know *The Tower* to play. The theme is flavour; the game stand
 
 ## The field
 
-Every non-centre tile is a **1-HP enemy**. It clears from a single tap or any blast. Enemies come
-in the Tower's classes (Common/Advanced/Elite/Fleet) purely for **sprite variety** — the class is
-cosmetic, it does not change HP or behaviour. There are no per-enemy health bars (a 1-HP enemy has
-nothing to show); only the Boss carries HP.
+Every non-centre tile is a **1-HP enemy**. It clears from a single tap or any blast. Enemies come in
+the Tower's classes (Common/Advanced/Elite/Fleet) purely for **sprite variety** — the class is
+cosmetic; it does not change HP or behaviour. Only the Boss carries HP.
 
 Mines are hidden among the enemies. There is **no flag** — you sweep mines, you don't mark them.
 
 ---
 
-## Mines are your weapons
+## Mines are ONE scarce pool — and bad allocation is fatal
 
-- **Tap a hidden mine → it arms.** It uncovers as a glowing Inner Land Mine with an `N×` stack
-  badge whose colour ramps with the stack. Free and safe; it does not explode.
+Your mines are your **entire arsenal for both jobs**: clearing the field *and* killing the Boss. The
+HUD **Mines** counter is your remaining ammo (positions stay hidden, like a classic mine counter — you
+budget how many to spend without being told where they are).
+
+- **Tap a hidden mine → it arms** (safe): it uncovers as a glowing Inner Land Mine with an `N×` stack
+  badge whose colour ramps with the stack.
 - **Tap an armed mine → it detonates.**
 
+Spend too many mines opening the board and you won't have enough left to break the Boss — the run is
+**lost** ("Out of mines") the instant the mines remaining can no longer finish the kill. This is the
+core roguelike tension: every detonation is an allocation decision.
+
 **Detonation** deals `stack` damage across a **square** around the mine, and the **radius grows with
-the stack too**:
+the stack**:
 
 ```
 radius = 1 + ⌊(stack − 1) / 2⌋      (capped at 3)   → stack 1→r1, 3→r2, 5→r3
 damage = stack                       (every tile in the square takes this)
 ```
 
-1-HP enemies in the square vaporise; the Boss (if in range) takes `stack`. So a bigger stack both
-**clears more ground** *and* **hits the Boss harder and from further away** (radius = reach). A blast
-also:
+A single detonation does four things:
 
-- **chain-arms** any hidden mine, and
-- **overlap-charges** every *armed* mine (+1 stack, capped at the stack cap),
+1. **Vaporises** the 1-HP ground in its square (and deals `stack` to the Boss if in reach).
+2. **Blast-arm cascade** — arms any hidden mine and pumps any *armed* mine it touches (inside the
+   blast **or one ring beyond**), so detonations chain and mines never need to spawn touching.
+3. **Scaled overlap boost** — the pump a neighbouring mine receives *scales with the detonator's own
+   stack*: `overlapBoost = max(1, ⌊stack · 0.5⌋)`. A 1×/2×/3× passes **+1**, a **4× passes +2** (lifts
+   a 1× to 3×), a 6× passes +3. So one fat mine snowballs the whole cluster — building a big mine and
+   setting it off beside the blob is the engine of the game.
+4. **Shrapnel** — on top of its square, the blast takes `⌊stack · 1⌋` **extra** enemies with it from
+   the ring just outside the blast. This is the field-clearing payoff for a big stack — a reason to
+   grow mines even away from the Boss. Its reach is **capped** (`shrapnelMaxReach = 3`) so a big mine's
+   shrapnel never lands beyond a full-size blast's footprint — it can shred a lot, but not across the
+   board. Shrapnel only ever hits ground (never mines or the Boss), so it can't cheese the kill.
 
-for any mine **inside the blast OR one ring beyond it** — a mine that merely *neighbours* a blast
-tile still catches the overlap. This one-ring reach matters because mines never spawn touching: at
-stack 1 (radius 1) a mine two tiles away is just outside the blast, and without the +1 trigger you
-could only ever stack by hooking mines together first. With it, detonating *next to* a mine pumps
-it, so overlap-charging works straight off the spawn — hooks then *tighten* a cluster rather than
-being the only way to build one. (Ground damage stays at the true radius; the extra ring only
-triggers mines.)
-
-That overlap is the engine of the game: detonating outer mines pumps the inner ones, so you build
-the biggest stacks in the centre — exactly where the Boss is.
-
----
-
-## Charge & tapping
-
-**Charge** is a small, regenerating pool (`current / max` in the HUD). A **hand-tap costs 1 charge
-and clears one 1-HP enemy** (broke → the tap does nothing). Charge is deliberately scarce, so you
-can't tap the whole board — you tap to find mines and open ground, and let **blasts** (which clear
-their whole square for free) do the bulk of the work.
-
-**The Boss is immune to hand-taps.** Only blasts hurt it. Tapping it does nothing.
+The Boss and mines are affected at the **extended (radius + 1) reach**; plain ground only at the true
+radius.
 
 ---
 
-## The Boss
+## Charge — a small budget you earn back
 
-A single tile at the exact centre, and the only multi-hit enemy (HP **18 / 30 / 56** by difficulty).
-You kill it by **delivering blast damage** to the centre: detonate charged mines near it. Like every
-special tile, the Boss is hit when it merely **neighbours the blast** (radius **+1**), so a mine one
-empty tile away already chips it — you do **not** have to land a mine right against it. Radius also
-grows with stack, so a well-charged mine tags the Boss from further still.
+**Charge** gates hand-tapping: a **hand-tap costs 1 charge** and clears one 1-HP enemy (broke → the
+tap does nothing). Charge does **not** passively regenerate. Instead:
 
-The killers spawn as a **sparse, non-touching wedge** near the Boss. How many of them (beyond the
-bare ≈√(2·HP) minimum) is the per-difficulty **hook-reliance dial** (`killerMargin`):
+- You **start with only a little** (`startingCharge`, well below the max).
+- **Detonating a mine refunds charge** — `round(stack · 0.5)`, so a **bigger mine refunds more**. This
+  climbs toward a ceiling (`maxPlayerCharge`) you can only reach by detonating.
 
-- **Easy** — a generous margin, so even a **spread, un-hooked chain finishes the Boss**. Hooks are
-  optional; they just let you win faster / score better.
-- **Standard** — a smaller margin: many boards fall to a loose chain, but plenty need you to hook a
-  few mines together first.
-- **Hard** — near-minimal: the mines only chain to a kill once **hooked into a tight cluster**, so on
-  Hard the Magnetic Hook is effectively **required**.
+So you can't hand-clear the board: you tap to find mines and open lanes, then let **blasts** (which
+clear their whole square for free and refund charge) do the bulk of the work. Mindless tapping stalls
+— you run the small budget dry and, without detonating big mines to refuel, you're stuck.
 
-So the floor is hook-free on Easy and the ceiling always rewards hooks; difficulty is partly *how
-much the Boss forces you to route mines with hooks*. (There is no hand-tap fallback — the Boss is
-blast-only.) Empirically (headless, a deliberately weak no-hook player): Easy 100% / Standard ~31% /
-Hard 0% winnable without hooks, while the hook-using reference bot clears 100% everywhere.
+**The Boss is immune to hand-taps.** Only blasts hurt it.
+
+---
+
+## The Boss — moated, and behind a regenerating shield
+
+A single tile at the exact centre, the only multi-hit enemy. Two defences make it a real fight:
+
+**A blast-free moat.** No mine spawns within `blastRadiusCap + 1` of the Boss, so **no blast reaches
+it from the field** — you **must** hook a charged cluster in to deliver the kill. Hooks aren't a
+luxury here; they're the only delivery mechanism (the headless `noHook` player wins **0%**).
+
+**A regenerating shield.** The Boss has a **shield** (cyan layer on its bar) in front of its **HP**:
+
+- **Absorb-then-overflow.** A hit fills the shield first; only the **overflow past it** reaches HP. A
+  hit smaller than the shield deals **zero HP damage** (the shield must be down to hurt the Boss), but
+  a hit that *breaks* the shield carries its remainder through — nothing is wasted.
+- **It regrows when neglected.** If the Boss goes `bossRegenDelayMoves` moves without taking damage,
+  the shield heals `bossShieldRegenPerMove` per move back up to its max. So you **can't** clear the
+  whole board in peace and then one-shot a fresh Boss — hit it and *keep* hitting. Commit.
+
+Its bar shows `HP + shield` and is always visible.
 
 ---
 
 ## Magnetic Hook
 
-A single-use, earnable, repeatable delivery tool — the game's main expression of *routing* skill.
+A single-use, earnable, repeatable delivery tool — the game's main expression of *routing* skill, and
+**required** to reach the moated Boss.
 
 - **Earn it.** Magnetic Hook bonus tiles hide on the field in the **outer/mid rings only** (never near
-  the centre, so you can't farm them by tapping around the Boss). They are **not marked** — a hook is a
-  *discovery*: clearing a tile that hides one — by tap or blast — grants **+1 hook charge** (the HUD
-  **Mag Hooks** count ticks up; you can hold several). *(A dev/testing build can mark them: `?showhooks`
-  in the browser, `--debug` in the CLI.)*
-- **Spend it.** **Drag** an armed mine one tile in **any of 8 directions** to pull it there (diagonals
-  included), or **right-click** / **long-press** it for a quick pull toward the Boss. It slides into
-  cleared ground, or **crushes** the enemy in the way (a free clear); it can't move onto another live
-  mine, onto the Boss, or off-grid.
-- **Numbers stay honest** — moving a mine updates the adjacent-mine counts at both the old and new
-  cell.
+  the centre). They are **not marked** — clearing a tile that hides one, by tap or blast, grants **+1
+  hook charge** (the HUD **Mag Hooks** count ticks up; you can hold several). *(A dev/testing build can
+  mark them: `?showhooks` in the browser, `--debug` in the CLI.)*
+- **Spend it.** **Drag** an armed mine one tile in any of 8 directions, or **right-click** /
+  **long-press** it for a quick pull toward the Boss. It slides into cleared ground or **crushes** the
+  1-HP enemy in the way (a free clear); it can't move onto another live mine, the Boss, or off-grid.
+- **Numbers stay honest** — moving a mine updates the adjacent counts at both the old and new cell.
 
-Why one tile, player-chosen? Because that keeps it a *routing* decision — which mine, when, along
-which lane you've cleared — rather than a board-warping nuke. It's the tool for "my biggest stack is
-two tiles short of the Boss."
+You gather a cluster of charged mines against the Boss, then chain it — the shield and moat mean a
+loose, un-gathered chain won't do.
 
 ---
 
 ## Numbers stay honest
 
 When a mine leaves a cell — detonated *or* hooked away — every adjacent revealed number updates.
-Numbers come only from tiles you cleared **by hand**; blast-vaporised tiles never reveal a number, so
-your information stays tied to the taps you chose to make. (Deduction here is light and optional: no
-tap is ever fatal, so the numbers are an efficiency aid for finding mines, not a survival puzzle.)
+Numbers come only from tiles you cleared **by hand**; blast-vaporised (and shrapnel) tiles never
+reveal a number, so your information stays tied to the taps you chose to make.
 
 ---
 
-## Winning, and the clock
+## Winning, losing, and the speedrun clock
 
-**Win:** the whole field cleared **and** the Boss dead. There is **no lose condition** — every board
-is completable, and the clock only counts **up**. Your **time is your score**: faster is better, and
-each difficulty awards **gold / silver / bronze** medals under set thresholds. (The run pauses on
-tab-hide, so nobody's time is ruined by a phone call.)
+**Win:** the whole field cleared **and** the Boss dead.
+
+**Lose** — two ways:
+
+- **Out of mines** — you spent too much of the pool clearing and can no longer finish the Boss.
+- **Too slow** — the speedrun clock ran out (see below).
+
+**The speedrun clock.** Your **first** game on a difficulty is untimed and just sets a baseline: your
+clear **time is your best**. Every game after that starts the clock at your best time and counts
+**down**. Clear before it hits zero and, if you beat your best, that becomes the new time to chase;
+run it out and the run is lost. Clear times still earn **gold / silver / bronze** medals at set
+thresholds. (The run pauses on tab-hide, so nobody's time is ruined by a phone call.)
+
+**Progress & high scores.** Best times and a per-difficulty record (games played, cleared, win rate,
+best medal) are kept in the browser (`ilm.best.*`, `ilm.stats`). The header has three icon buttons:
+**?** (how to play), **🗑** (reset all progress — clears best times and stats), and **🏆** (high scores
+& stats). Reset asks for confirmation; it can't be undone.
 
 ---
 
@@ -162,40 +183,33 @@ tab-hide, so nobody's time is ruined by a phone call.)
 Odd squares, so the Boss sits at a true centre. Every board is **seeded and deterministic** (same
 seed → same board), which powers the CLI, the harness, and any future daily board.
 
-| Difficulty | Size | Mines | Hooks | Boss HP | Stack cap | Max charge | Regen | Par | Gold / Silver / Bronze |
-|---|---|---|---|---|---|---|---|---|---|
-| **Easy** (`gentle`) | 13×13 | 24 | 8 | 18 | 6 | 12 | 1.0/s | 1:15 | ≤0:48 / ≤1:00 / ≤1:15 |
-| **Standard** | 17×17 | 40 | 13 | 28 | 7 | 14 | 1.1/s | 2:10 | ≤1:28 / ≤1:48 / ≤2:10 |
-| **Hard** | 21×21 | 62 | 20 | 40 | 8 | 16 | 1.2/s | 2:55 | ≤2:02 / ≤2:25 / ≤2:55 |
+| Difficulty | Size | Mines | Hooks | Boss HP + Shield | Stack cap | Start / Max charge | Par | Gold / Silver / Bronze |
+|---|---|---|---|---|---|---|---|---|
+| **Easy** (`gentle`) | 15×15 | 34 | 30 | 14 + 5 | 6 | 18 / 40 | 0:50 | ≤0:30 / ≤0:38 / ≤0:50 |
+| **Standard** | 17×17 | 42 | 45 | 30 + 9 | 7 | 22 / 48 | 1:06 | ≤0:44 / ≤0:54 / ≤1:06 |
+| **Hard** | 21×21 | 62 | 70 | 42 + 12 | 8 | 26 / 56 | 1:30 | ≤1:00 / ≤1:14 / ≤1:30 |
 
-The **caps scale with difficulty** — a harder board gives bigger max stacks and a bigger charge
-pool (its bigger Boss and field need them). Blast-radius cap is 3 everywhere (a consistent blast
-size), a tap always costs 1 charge, and mines are ~14% of the field. Generation guarantees:
+Shared across difficulties: charge does **not** regenerate (earned by detonating, `round(stack·0.5)`
+per mine); blast-radius cap is 3; the overlap boost is `⌊stack·0.5⌋`; shrapnel is `⌊stack·1⌋` capped at
+Chebyshev 3; the shield regrows after 4 idle moves; a tap costs 1 charge; mines are ~14% of the field.
+
+Generation guarantees:
 
 - the **opening is a corner** (zero adjacent mines, safe first tap — routes play inward);
 - the **Boss is pinned to centre and never a mine**;
+- **no mine spawns inside the blast-free moat** (`blastRadiusCap + 1` around the Boss) — so the kill
+  **must** be hooked across it;
 - **no two mines ever spawn touching** (Chebyshev-adjacent) — every stack is *built*, never found;
-- the **Boss-killing mines spawn as a sparse wedge** in the "near" zone (within `gatherRadius` of the
-  Boss, one side only, never inside the inner two rings), sized to ≈√(2·BossHP) + margin — the
-  minimum that can chain past the Boss's HP. Because they don't touch and aren't in range at rest,
-  **the only way to kill the Boss is to hook them into a tight blob and chain it** — no cheese path;
-- **field ordnance** (the rest of the mines) spawns strictly *outside* the near zone — ammunition for
-  clearing ground, never accidentally part of the kill cluster;
 - **Magnetic Hook tiles only in the outer rings**, so pulls are earned by clearing outward.
-
-This is verified solvable the only honest way: the reference bot **completes 100%** of boards on every
-difficulty (see Balance status), and the "blind prober" **completes 0%**.
-
-> Note: medal/par times are calibrated against the reference bot in the headless sim and will be
-> re-tuned against real wall-clock play. The gathering requirement makes clears longer than the
-> earlier no-gather model (Easy now ~100 s for the bot; a fast human should beat that).
 
 ---
 
 ## Accessibility & platform
 
 - **Class is shown by colour + shape** (recoloured Tower sprites).
-- **`prefers-reduced-motion` honoured** — shockwaves, particles, screen-shake all have a calm path.
+- **No screen shake** (a fast game; a kick every detonation would be obnoxious). Effects are
+  deliberately **subtle**. `prefers-reduced-motion` additionally suppresses ambient looping motion
+  (Boss idle pulse, orb pulse); the brief gameplay-feedback flourishes still play.
 - **Full keyboard navigation and ARIA** — the board is real DOM (roving tabindex, per-tile labels).
 - **Touch-first** — tap to clear/arm, tap the orb to detonate, **long-press an armed mine to hook**;
   the board fits phone widths.
@@ -205,61 +219,44 @@ difficulty (see Balance status), and the "blind prober" **completes 0%**.
 ## Architecture & tooling
 
 - **Framework-free engine** (`src/engine`) — pure TypeScript, deterministic, emits an ordered event
-  list on every action. Its only host output is a `GameResult` (time + medal). All tunables live in
-  `tuning.ts`.
+  list on every action. Its only host output is a `GameResult` (time, medal, outcome, `timedOut`). All
+  tunables live in `tuning.ts`; the engine can `clone()` itself for hypothetical play.
 - **DOM board + one canvas FX overlay** (`src/ui`) — vanilla TS, driven by the engine's events.
 - **Headless CLI** (`pnpm play`) — ASCII board; `t`/`d`/`h` = tap / detonate / hook; `--debug`,
   `--moves`, `--auto` (`--n` for a speed sweep).
-- **Speed harness** (`pnpm harness`) — the board always completes, so the metric is **clear time**,
-  not win rate: median time + medal split + **hooks used** per bot, flagging any board that can't
-  finish or where blind play isn't slower. The reference bot runs three phases — clear the field
-  outward (sparing the near-Boss killers), **gather** those killers with directional hooks *only when
-  a chain-damage prediction says the spread won't kill the Boss on its own*, then **chain** in a one-
-  ply-greedy order (measured against an offline beam search at ~95% of the optimal boss delivery). It
-  runs alongside two references: **`noHook`** — the same player with gathering switched off, whose
-  finish-rate measures how hook-dependent each difficulty is — and the **blind prober**, which can't
-  kill the blast-only Boss at all.
-- **Autoplay (in-game)** — driven by a genuine **Monte Carlo Tree Search** planner (`mcts.ts`), not
-  the heuristic: each move it clones the live game and simulates many possible futures, letting the
-  choice emerge from which ones turn out best (UCB balances exploiting the current-best line against
-  exploring alternatives; the heuristic is reused only as the fast *playout policy* that finishes a
-  hypothetical game so it can be scored). It plays *better* than the heuristic everywhere (72 / 98 /
-  133 s vs 96 / 130 / 162) and, thanks to randomised exploration, differently every run — it reasons
-  afresh rather than replaying a script. A wall-clock budget per move keeps the live demo responsive.
+- **Speed harness** (`pnpm harness`) — plays the reference bots headlessly and reports finish rate,
+  clear time, medal split, and hooks used, flagging any difficulty that's too punishing or cheesable.
+  The reference bot budgets its mines against the ammo counter (reserve ~what the Boss needs, spend the
+  surplus clearing), gathers a squad to a Boss-adjacent rally point with directional hooks, and chains
+  it in a greedy order. Two references bracket it: **`noHook`** (gathering off — measures how
+  hook-dependent each difficulty is) and the **blind prober** (random-ish play — measures cheese).
+- **Autoplay (in-game)** — a **Monte Carlo Tree Search** planner (`mcts.ts`): each move it clones the
+  live game, simulates many futures, and lets the choice emerge from which turn out best. A wall-clock
+  budget per move keeps the demo responsive.
 
-The game is a **standalone repo**, to be embedded in the Tower Run Tracker later via `GameResult` —
-the engine knows nothing about the host.
+The game is a **standalone repo**, embedded in the Tower Run Tracker via an iframe + `postMessage`
+handoff of the `GameResult` — the engine knows nothing about the host.
 
 ---
 
 ## Balance status
 
-Reference bot (hooks used *only when needed*) over the headless sim — **finishes 100%** on every
-difficulty, median clear ~**96 / 130 / 160 s**, landing mostly **silver** with a spread to gold (fast
-runs) and bronze (slow); it never fails to medal. Hooks spent scale with difficulty and need, not
-habit: **median 0 / 0 / 3** (Easy / Standard / Hard) — on Easy the spread chain always wins so it
-never hooks, on Hard it hooks a few mines to make the chain lethal.
+Reference bot (a near-optimal player) over the headless sim, n=200: **finishes ~54 / 54 / 52%**
+(Easy / Standard / Hard) — a challenging but fair share for strong play. The two guard rails hold:
+**`noHook` finishes 0%** everywhere (the moat makes hooks mandatory) and the **blind prober finishes
+0%** (no tap-cheese — the small charge budget stalls mindless play). No balance flags.
 
-The hook-reliance ramp is the point of the `killerMargin` dial. Measured by the `noHook` reference
-(same player, gathering off), **winnable without hooks: Easy 100% / Standard ~31% / Hard 0%** — hooks
-optional on Easy, needed on many Standard boards, effectively required on Hard (rare tightly-spawned
-seeds aside). The **blind prober finishes 0%** everywhere — no cheese path. No balance flags.
-
-So the shape is: the floor is hook-free on Easy, hooks are what win the hard boards *and* what shave
-time for a better medal — you never hook out of habit, only when it pays.
+Because the bot is *near-optimal*, ~55% for it means an average human wins less and a skilled human
+more — which is the intended difficulty. Median clear times sit near the gold/silver line, so median
+play lands silver and elite play golds.
 
 ## Open questions
 
-Empirical — answered by play, not argument:
+Answered by play, not argument:
 
-- Does the **gather-then-chain** climax feel like *routing skill* or *busywork*? Levers: `gatherRadius`,
-  `killerMargin`, Boss HP.
-- Hook tiles are 7 / 11 / 16 by difficulty; Hard now spends most of them. Is the scarcity right, or
-  should Hard be even tighter so a missed hook stings?
-- Times settled at ~96 / 130 / 160 s. Right feel, or should the field shrink to speed Easy up?
-- Is the outward→inward route compelling, or should generation shape the field more?
-
----
-
-*Known stale surfaces (to fix): the in-game **help dialog** and some UI copy still describe an older
-model. This doc is current; those are not yet.*
+- Does the **gather-then-break-the-shield** climax feel like routing skill, or busywork? Levers:
+  `bossShield`, the regen delay/rate, `gatherRadius`.
+- Is the **surplus-mines** feel right for a skilled player, or should supply be tighter? (The bot needs
+  its full supply, so this can't be tuned on the bot alone — it's a real-play question.)
+- Do the **shrapnel** and **scaled boost** read clearly now that each has its own FX, or still opaque?
+- Are the **countdown-to-best** stakes motivating, or too punishing on an off run?

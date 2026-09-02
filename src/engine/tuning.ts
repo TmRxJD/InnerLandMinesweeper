@@ -62,11 +62,6 @@ export interface DifficultyConfig {
    *  inside it into the Boss-killing blob. Must be wide enough to hold ≈√(2·bossHp) non-adjacent
    *  mines; everything past it is field ordnance, spent only to clear ground. */
   readonly gatherRadius: number
-  /** How many killer mines beyond the bare ≈√(2·bossHp) minimum to spawn. This is the hook-reliance
-   *  dial: a big margin means even a SPREAD, un-hooked chain finishes the Boss (hooks optional —
-   *  easy); a small margin means the mines only chain to a kill once hooked into a tight cluster
-   *  (hooks effectively required — hard). */
-  readonly killerMargin: number
   /** How much stack a mine passes on when it detonates NEXT TO a still-armed mine — and it scales
    *  with the DETONATOR's own stack: `overlapBoost(sourceStack)`. A fat mine hands a bigger boost
    *  than a small one (a 4× lifts a 1× to 3×), so building one big mine and setting it off beside
@@ -128,7 +123,6 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     stackCap: 6,
     blastRadiusCap: 3,
     gatherRadius: 4,
-    killerMargin: 6, // easy: spread chain wins on its own, hooks optional
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
     shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
@@ -156,7 +150,6 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     stackCap: 7,
     blastRadiusCap: 3,
     gatherRadius: 4,
-    killerMargin: 3, // standard: needs a few hooks on many boards, hook-free on some
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
     shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel
@@ -184,7 +177,6 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     stackCap: 8,
     blastRadiusCap: 3,
     gatherRadius: 5,
-    killerMargin: 1, // hard: minimal mines -> must hook a tight cluster; rare seeds win hook-free
     overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
     shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
     shrapnelMaxReach: 3, // never past a full-size blast (cheb 3); trims big mines' cheb-4 shrapnel

@@ -1,20 +1,24 @@
 # Inner Land Minesweeper
 
-A *Tower*-themed sweep-the-mines puzzle. You're a mine **sweeper** — finding a mine is *good*, mines
-are your weapons, and the timer is your score, not your executioner. Classic Minesweeper reading of
-the board, wrapped in a build-and-deliver blast economy that climaxes on a central Boss.
+A *Tower*-themed sweep-the-mines **roguelike speedrun**. You're a mine **sweeper** — finding a mine is
+*good*, mines are your weapons. But they're one scarce pool for both clearing the field *and* killing
+the central Boss, so bad allocation loses the run; and after your first clear the timer counts *down*
+from your best, so every game must be faster than the last. Classic Minesweeper board-reading wrapped
+in a build-and-deliver blast economy.
 
 > **Full design:** [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — the canonical description of how it
 > plays and why. Read that first; this file is just the map of the repo.
 
 ## The loop, in one breath
 
-Clear the field from a corner inward. Every non-centre tile is a 1-HP enemy that vaporises on any
-hit; tapping a hidden mine **arms** it, tapping an armed one **detonates** it. A blast clears a square
-*and* charges nearby mines' stacks — so you chain detonations to pump the mines near the middle, then
-deliver those big stacks to the **Boss** at the centre (the only multi-hit tile, blast-only). The
-**Magnetic Hook** lets you drag an armed mine one tile to tighten a cluster: optional on Easy, the
-key to the kill on Hard. Win = whole field cleared and Boss dead; faster clear = better medal.
+Clear the field from a corner inward with a **scarce pool of mines** that also has to kill the Boss.
+Every non-centre tile is a 1-HP enemy that vaporises on any hit; tapping a hidden mine **arms** it,
+tapping an armed one **detonates** it. A blast clears a square, refunds some charge, and **pumps
+nearby mines' stacks** (the bigger the mine you set off, the bigger the boost) — so you chain
+detonations to grow the cluster near the middle. The **Boss** sits in a blast-free **moat** behind a
+**regenerating shield**, so you *must* **Magnetic-Hook** a charged cluster in and break it. Win =
+field cleared and Boss dead; lose by running out of mines, or by letting the **countdown to your best
+time** hit zero.
 
 ## Why a separate repo
 
@@ -29,7 +33,7 @@ src/
   engine/     Pure TS game core. Zero DOM, zero framework, zero I/O.
     types.ts     The contract: TileView, BoardSnapshot, GameEvent, GameResult, MinesweeperEngine.
     engine.ts    createEngine — reveal / detonate / useHook / tick, emits an ordered EventList.
-    board.ts     Seeded board generation (corner opening, non-touching killer wedge, hook tiles).
+    board.ts     Seeded board generation (corner opening, non-touching mines outside a Boss moat, hook tiles).
     auto-player.ts  Heuristic reference: clear → gather-when-needed → escalating chain (harness + MCTS rollouts).
     mcts.ts      The AI that drives in-game Autoplay: Monte Carlo Tree Search — clones the game and
                  searches simulated futures, so it reasons per move and plays variedly, not by rules.
@@ -72,9 +76,11 @@ into `public/games/inner-land-minesweeper/`; the page lives at `/games/inner-lan
 
 ## Status
 
-**Playable and tuned.** Engine, UI, CLI, dev + embed hosts, and the balance harness are all in.
-Across thousands of headless seeds every board is completable, blind play never wins, and hook
-reliance scales Easy → Hard. Remaining work is polish and a persistence/leaderboard handoff.
+**Shippable.** Engine, UI, CLI, dev + embed hosts, and the balance harness are all in, and the game
+is embedded in the Tower Run Tracker at `/games/inner-land-minesweeper`. Over the headless sim the
+near-optimal bot wins ~54 / 54 / 52% (Easy / Standard / Hard) while hookless and blind play both win
+0%. Best times and a per-difficulty record persist locally (in-header 🏆 stats, 🗑 reset). The win
+handoff to a host leaderboard is via `ilm:result` (`GameResult`).
 
 ## Scripts
 
