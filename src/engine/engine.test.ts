@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createEngine } from './engine'
 import { generateBoard, tileAt, type Board } from './board'
-import { DIFFICULTIES, blastRadiusForStack } from './tuning'
+import { DIFFICULTIES, blastRadiusForStack, overlapBoost } from './tuning'
 import { autoPlay } from './auto-player'
 import type { Coord } from './types'
 
@@ -390,6 +390,79 @@ describe('blast radius scales with stack (capped)', () => {
     expect(blastRadiusForStack(5, 3)).toBe(3)
     expect(blastRadiusForStack(6, 3)).toBe(3)
     expect(blastRadiusForStack(99, 3)).toBe(3) // capped
+  })
+})
+
+describe('overlap boost scales with the detonator', () => {
+  it('a bigger detonating mine hands a bigger boost (a 4× lifts a neighbour +2)', () => {
+    const per = cfg.overlapBoostPerStack
+    // 1×/2×/3× still pass +1 (so existing chains never stall); a 4× passes +2, a 6× passes +3.
+    expect(overlapBoost(1, per)).toBe(1)
+    expect(overlapBoost(2, per)).toBe(1)
+    expect(overlapBoost(3, per)).toBe(1)
+    expect(overlapBoost(4, per)).toBe(2) // 1× neighbour → 3×, the requested behaviour
+    expect(overlapBoost(6, per)).toBe(3)
+  })
+
+  it('the boost is a real control: turning it off drops a 4× back to +1', () => {
+    // Prove the coefficient actually drives the number — plant the "off" value and watch it change.
+    expect(overlapBoost(4, 0)).toBe(1) // max(1, floor(4·0)) — the ≥1 floor keeps chains alive
+    expect(overlapBoost(4, cfg.overlapBoostPerStack)).toBeGreaterThan(overlapBoost(4, 0))
+  })
+})
+
+describe('shrapnel — a blast also kills enemies just outside its radius', () => {
+  const ch = (a: Coord, b: Coord) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))
+
+  const shrapnelKills = Math.floor(1 * cfg.shrapnelPerStack) // for a stack-1 detonation
+
+  /** An interior mine (full cheb-2 ring on-grid) with at least `shrapnelKills` covered non-mine
+   *  tiles at cheb exactly 2. Ring mines don't confound the check — a blast at cheb 2 only ARMS a
+   *  mine, never emits `tileDestroyed` — but we need enough ring GROUND for shrapnel to consume. */
+  function isolatedMine(board: Board): Coord | null {
+    for (const m of board.tiles) {
+      if (!m.isMine) continue
+      if (m.x < 2 || m.y < 2 || m.x >= board.width - 2 || m.y >= board.height - 2) continue
+      let ringGround = 0
+      for (const t of board.tiles) {
+        if (ch({ x: m.x, y: m.y }, { x: t.x, y: t.y }) !== 2) continue
+        if (!t.isMine && t.tier !== 'boss') ringGround++
+      }
+      if (ringGround >= shrapnelKills) return { x: m.x, y: m.y }
+    }
+    return null
+  }
+
+  it('destroys ground BEYOND the vaporised radius (only shrapnel can reach the cheb-2 ring)', () => {
+    for (let i = 0; i < 400; i++) {
+      const seed = `shrap-${i}`
+      const mine = isolatedMine(truth(seed))
+      if (!mine) continue
+      const engine = createEngine({ difficulty: DIFF, seed })
+      engine.reveal(mine) // arm it (stack 1 → radius 1, so cheb 2 is outside the blast)
+      const events = engine.detonate(mine)
+      // A stack-1 blast vaporises cheb ≤ 1; a destroyed tile at cheb 2 can ONLY be shrapnel.
+      const destroyedAt2 = events.filter(e => e.kind === 'tileDestroyed' && ch(mine, e.coord) === 2)
+      expect(destroyedAt2.length).toBe(shrapnelKills) // floor(stack · rate), ring ground guaranteed
+      return
+    }
+    throw new Error('no isolated mine found to test shrapnel')
+  })
+
+  it('is deterministic — same seed & move picks the same shrapnel', () => {
+    for (let i = 0; i < 400; i++) {
+      const seed = `shrap-det-${i}`
+      const mine = isolatedMine(truth(seed))
+      if (!mine) continue
+      const run = () => {
+        const e = createEngine({ difficulty: DIFF, seed })
+        e.reveal(mine)
+        return e.detonate(mine).filter(ev => ev.kind === 'tileDestroyed').map(ev => `${ev.coord.x},${ev.coord.y}`)
+      }
+      expect(run()).toEqual(run())
+      return
+    }
+    throw new Error('no isolated mine found to test shrapnel determinism')
   })
 })
 

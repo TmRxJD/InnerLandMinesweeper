@@ -92,6 +92,9 @@ export interface BoardSnapshot {
   /** Caps for this difficulty, so a strategy layer (bot / UI) can reason about stacks & reach. */
   readonly stackCap: number
   readonly blastRadiusCap: number
+  /** How much a detonation pumps a neighbouring mine's stack, per point of the DETONATOR's stack
+   *  (via `overlapBoost`). The strategy layer needs it to predict how fat a chain becomes. */
+  readonly overlapBoostPerStack: number
   /** Chebyshev radius of the "near-Boss" zone: the mines inside it are the killers to gather into
    *  the blob; everything past it is field ordnance. Generation and the strategy layer share it. */
   readonly gatherRadius: number

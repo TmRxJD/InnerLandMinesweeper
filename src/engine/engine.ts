@@ -19,7 +19,7 @@ import type {
   MinesweeperEngine,
   TileView,
 } from './types'
-import { DIFFICULTIES, blastRadiusForStack, medalForTime, type DifficultyConfig } from './tuning'
+import { DIFFICULTIES, blastRadiusForStack, overlapBoost, medalForTime, type DifficultyConfig } from './tuning'
 import {
   generateBoard,
   neighbours,
@@ -28,6 +28,7 @@ import {
   type Board,
   type Tile,
 } from './board'
+import { Rng } from './rng'
 
 class Engine implements MinesweeperEngine {
   private readonly cfg: DifficultyConfig
@@ -140,7 +141,7 @@ class Engine implements MinesweeperEngine {
     for (const t of withinRadius(this.board, tile.x, tile.y, radius + 1)) {
       if (t.isMine) {
         if (t.state === 'covered') this.armMine(t, 'blast', events)
-        else if (t.state === 'armed') this.chargeMine(t, events)
+        else if (t.state === 'armed') this.chargeMine(t, stack, events)
       } else if (t.tier === 'boss') {
         t.hp -= stack
         if (t.hp <= 0) this.destroyGroundTile(t, events)
@@ -161,6 +162,30 @@ class Engine implements MinesweeperEngine {
         chainCleared += 1
       } else {
         this.damageTile(t, events)
+      }
+    }
+
+    // 4c. Shrapnel. A blast doesn't just clear its radius — it also takes `floor(stack · shrapnelPerStack)`
+    //     extra enemies with it, chosen from the live ground that merely TOUCHES the blast (the ring
+    //     just outside the vaporised area). This is the field-clearing payoff for a big stack: growing
+    //     a mine clears more per detonation even when the Boss is nowhere near, so ammo lasts longer.
+    //     Picks are deterministic (seeded from this exact detonation) so a seed still reproduces a run,
+    //     and they never touch mines or the Boss — shrapnel can't cheese the moated kill.
+    const shrapnelKills = Math.floor(stack * this.cfg.shrapnelPerStack)
+    if (shrapnelKills > 0) {
+      const inner = new Set(radiusTiles.map(t => t.y * this.board.width + t.x))
+      const ring: Tile[] = []
+      for (const t of withinRadius(this.board, tile.x, tile.y, radius + 1)) {
+        if (inner.has(t.y * this.board.width + t.x)) continue // already inside the blast
+        if (t.isMine || t.tier === 'boss') continue // mines/Boss handled at 4a; shrapnel is ground only
+        if (t.state !== 'covered' || t.hp <= 0) continue // only still-standing field enemies
+        ring.push(t)
+      }
+      const rng = new Rng(`${this.seed}:shrapnel:${tile.x}:${tile.y}:${this.detonations}`)
+      rng.shuffle(ring)
+      for (const t of ring.slice(0, shrapnelKills)) {
+        this.destroyGroundTile(t, events) // vaporised: cleared with its number kept hidden
+        chainCleared += 1
       }
     }
 
@@ -206,6 +231,7 @@ class Engine implements MinesweeperEngine {
       stackCap: this.cfg.stackCap,
       blastRadiusCap: this.cfg.blastRadiusCap,
       gatherRadius: this.cfg.gatherRadius,
+      overlapBoostPerStack: this.cfg.overlapBoostPerStack,
       minesRemaining: this.board.tiles.reduce((n, t) => n + (t.isMine && t.state !== 'detonated' ? 1 : 0), 0),
     }
   }
@@ -364,12 +390,15 @@ class Engine implements MinesweeperEngine {
     }
   }
 
-  /** A mine caught inside another mine's blast gains charge (capped) — the Chrono-Jump
-   *  overlap. Called for every already-armed mine within the blast radius. */
-  private chargeMine(mine: Tile, events: GameEvent[]): void {
+  /** A mine caught inside another mine's blast gains charge (capped) — the Chrono-Jump overlap. The
+   *  boost scales with the DETONATOR's stack (`sourceStack`): a fat mine pumps its neighbour harder
+   *  than a small one, so one big detonation snowballs the whole cluster. Called for every armed
+   *  mine within the detonator's (extended) blast reach. */
+  private chargeMine(mine: Tile, sourceStack: number, events: GameEvent[]): void {
     if (mine.mineCharge >= this.cfg.stackCap) return // already at the cap
     const from = mine.mineCharge
-    mine.mineCharge = Math.min(this.cfg.stackCap, mine.mineCharge + this.cfg.chargeGainPerOverlap)
+    const gain = overlapBoost(sourceStack, this.cfg.overlapBoostPerStack)
+    mine.mineCharge = Math.min(this.cfg.stackCap, mine.mineCharge + gain)
     events.push({ kind: 'mineChargeChanged', coord: { x: mine.x, y: mine.y }, from, to: mine.mineCharge })
   }
 

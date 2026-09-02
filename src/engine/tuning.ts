@@ -57,8 +57,16 @@ export interface DifficultyConfig {
    *  easy); a small margin means the mines only chain to a kill once hooked into a tight cluster
    *  (hooks effectively required — hard). */
   readonly killerMargin: number
-  /** Stack a mine gains each time it is caught inside another mine's blast (overlap charging). */
-  readonly chargeGainPerOverlap: number
+  /** How much stack a mine passes on when it detonates NEXT TO a still-armed mine — and it scales
+   *  with the DETONATOR's own stack: `overlapBoost(sourceStack)`. A fat mine hands a bigger boost
+   *  than a small one (a 4× lifts a 1× to 3×), so building one big mine and setting it off beside
+   *  the cluster snowballs the whole blob. See `overlapBoost`. */
+  readonly overlapBoostPerStack: number
+  /** Shrapnel: on top of vaporising its radius, a blast also kills `floor(stack · shrapnelPerStack)`
+   *  extra enemies that merely TOUCH the blast (the ring just outside it). This is the field-clearing
+   *  payoff for a big stack — a reason to grow mines even when the Boss is nowhere near. At 1.0 a 3×
+   *  blast takes 3 bonus enemies with it. */
+  readonly shrapnelPerStack: number
   /** Fraction of a detonated mine's stack that converts into the player's charge pool. */
   readonly chargeConversion: number
   /** Multiplier applied to the (par − time) score on this difficulty. */
@@ -69,6 +77,15 @@ export interface DifficultyConfig {
  *  stack 1→r1, 2→r1, 3→r2, 4→r2, 5→r3, 6→r3. */
 export function blastRadiusForStack(stack: number, cap: number): number {
   return Math.max(1, Math.min(cap, 1 + Math.floor((stack - 1) / 2)))
+}
+
+/** Stack handed to a neighbouring armed mine when a mine of `sourceStack` detonates beside it.
+ *  Scales with the detonator's stack (`perStack`, default 0.5) but never drops below 1, so chains
+ *  never stall: 1×/2×/3× still pass +1, a 4× passes +2, a 6× passes +3. The engine, the bot's
+ *  lethality prediction, and its detonation ordering ALL route through this one function so they
+ *  can never disagree about how fat a chain becomes. */
+export function overlapBoost(sourceStack: number, perStack: number): number {
+  return Math.max(1, Math.floor(sourceStack * perStack))
 }
 
 /** A shared cosmetic sprite mix (skewed toward Common). Difficulties can override. */
@@ -82,20 +99,21 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 30,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
-    bossHp: 12,
+    bossHp: 18,
     parSeconds: 50,
     goldSeconds: 30,
     silverSeconds: 38,
     bronzeSeconds: 50,
-    startingCharge: 40, // fixed tap budget (no refund); cascade does the clearing
-    maxPlayerCharge: 40, // = startingCharge: charge only decreases (no refund), so this is the whole budget
+    startingCharge: 18, // small: you start able to tap only a little; detonations fund the rest
+    maxPlayerCharge: 40, // the ceiling you can EARN back up to by detonating (start is well below it)
     chargeRegenPerSecond: 0, // earned, not regenerated: detonate mines to fund tapping
     stackCap: 6,
     blastRadiusCap: 3,
     gatherRadius: 4,
     killerMargin: 6, // easy: spread chain wins on its own, hooks optional
-    chargeGainPerOverlap: 1,
-    chargeConversion: 0, // no refund: charge is a fixed tap budget; the blast-arm cascade clears
+    overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
+    shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
+    chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 1,
   },
   standard: {
@@ -105,20 +123,21 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 45,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
-    bossHp: 20,
+    bossHp: 37,
     parSeconds: 66,
     goldSeconds: 44,
     silverSeconds: 54,
     bronzeSeconds: 66,
-    startingCharge: 48, // fixed tap budget (no refund); cascade does the clearing
-    maxPlayerCharge: 48, // = startingCharge: charge only decreases (no refund), so this is the whole budget
+    startingCharge: 22, // small: you start able to tap only a little; detonations fund the rest
+    maxPlayerCharge: 48, // the ceiling you can EARN back up to by detonating (start is well below it)
     chargeRegenPerSecond: 0,
     stackCap: 7,
     blastRadiusCap: 3,
     gatherRadius: 4,
     killerMargin: 3, // standard: needs a few hooks on many boards, hook-free on some
-    chargeGainPerOverlap: 1,
-    chargeConversion: 0, // no refund: charge is a fixed tap budget; the blast-arm cascade clears
+    overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
+    shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
+    chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 1.6,
   },
   hard: {
@@ -128,20 +147,21 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     hookCount: 70,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
-    bossHp: 28,
+    bossHp: 52,
     parSeconds: 90,
     goldSeconds: 60,
     silverSeconds: 74,
     bronzeSeconds: 90,
-    startingCharge: 56, // fixed tap budget (no refund); cascade does the clearing
-    maxPlayerCharge: 56, // = startingCharge: charge only decreases (no refund), so this is the whole budget
+    startingCharge: 26, // small: you start able to tap only a little; detonations fund the rest
+    maxPlayerCharge: 56, // the ceiling you can EARN back up to by detonating (start is well below it)
     chargeRegenPerSecond: 0,
     stackCap: 8,
     blastRadiusCap: 3,
     gatherRadius: 5,
     killerMargin: 1, // hard: minimal mines -> must hook a tight cluster; rare seeds win hook-free
-    chargeGainPerOverlap: 1,
-    chargeConversion: 0, // no refund: charge is a fixed tap budget; the blast-arm cascade clears
+    overlapBoostPerStack: 0.5, // a 4× lifts a neighbour +2 (→3×); 1–3× still pass +1
+    shrapnelPerStack: 1, // a 3× blast also takes 3 touching enemies with it
+    chargeConversion: 0.5, // a detonated mine refunds round(stack·0.5) charge — bigger mine, more back
     scoreDifficultyMultiplier: 2.4,
   },
 }

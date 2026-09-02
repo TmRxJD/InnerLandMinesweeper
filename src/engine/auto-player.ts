@@ -8,7 +8,7 @@
  * is the actual way it dies — the bot can't cheese it.
  */
 
-import { blastRadiusForStack } from './tuning'
+import { blastRadiusForStack, overlapBoost } from './tuning'
 import type { BoardSnapshot, Coord, TileView } from './types'
 
 export interface AutoAction {
@@ -137,8 +137,9 @@ function chainStarter(near: TileView[], boss: Coord, snap: BoardSnapshot): TileV
     let potential = 0
     for (const o of near) {
       if (o === m) continue
-      // A detonation charges mines one ring beyond its blast too (engine's radius+1 trigger).
-      const charged = cheb(m.coord, o.coord) <= r + 1 ? 1 : 0
+      // A detonation charges mines one ring beyond its blast too (engine's radius+1 trigger), and the
+      // boost scales with THIS mine's stack (overlapBoost) — matching the engine exactly.
+      const charged = cheb(m.coord, o.coord) <= r + 1 ? overlapBoost(m.mineCharge ?? 1, snap.overlapBoostPerStack) : 0
       potential += Math.min(snap.stackCap, (o.mineCharge ?? 1) + charged)
     }
     const score = immediate + potential
@@ -170,7 +171,7 @@ function predictChainDamage(near: TileView[], boss: Coord, snap: BoardSnapshot):
       for (let j = 0; j < sim.length; j++) {
         const o = sim[j]!
         if (j === i || !o.alive) continue
-        sc += Math.min(snap.stackCap, o.s + (ch(m, o) <= r + 1 ? 1 : 0))
+        sc += Math.min(snap.stackCap, o.s + (ch(m, o) <= r + 1 ? overlapBoost(m.s, snap.overlapBoostPerStack) : 0))
       }
       if (sc > bs) {
         bs = sc
@@ -184,7 +185,7 @@ function predictChainDamage(near: TileView[], boss: Coord, snap: BoardSnapshot):
     for (let j = 0; j < sim.length; j++) {
       const o = sim[j]!
       if (j === bi || !o.alive) continue
-      if (ch(m, o) <= r + 1) o.s = Math.min(snap.stackCap, o.s + 1)
+      if (ch(m, o) <= r + 1) o.s = Math.min(snap.stackCap, o.s + overlapBoost(m.s, snap.overlapBoostPerStack))
     }
     m.alive = false
   }

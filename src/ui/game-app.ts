@@ -247,17 +247,20 @@ export class GameApp {
             <span class="ilm-help__icon ilm-help__icon--ground">3</span>
             <div><b>Tap to clear.</b> Every field tile is a 1-HP enemy — one tap clears it and reveals
               a number: how many mines touch it, like classic Minesweeper. Tapping spends <b>charge</b>,
-              and charge is a <b>fixed budget that does not regenerate</b>, so you can't hand-clear the
-              whole board. Tap to find mines and open lanes; let <b>blasts</b> do the bulk clearing.
-              Colours are just enemy variety.</div>
+              and you <b>start with only a little</b> — you earn more by <b>detonating mines</b>, and a
+              <b>bigger mine refunds more</b>. So you can't just hand-clear the board; tap to find mines
+              and open lanes, then let <b>blasts</b> do the bulk clearing. Colours are just enemy variety.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><span class="ilm-help__sprite" style="--sprite:url(${mineUrl})"></span></span>
-            <div><b>Mines are your ammo.</b> Tap a hidden mine and it <b>arms</b> (safe); tap an armed
-              mine to <b>detonate</b> — a square blast clears everything in it for free and <b>arms the
-              mines it touches</b>, so detonations chain. A mine's <b>stack</b> (the <code>N×</code> badge)
-              sets its damage and blast size, and overlapping blasts pump nearby stacks. The <b>Mines</b>
-              counter in the HUD is how much ammo you have left for <em>both</em> jobs — budget it.</div>
+            <div><b>Mines are your ammo — grow them.</b> Tap a hidden mine to <b>arm</b> it (safe); tap an
+              armed mine to <b>detonate</b> — a square blast clears its area for free, <b>arms the mines it
+              touches</b> (so blasts chain), and takes a few <b>extra enemies just outside it</b> with it.
+              A mine's <b>stack</b> (the <code>N×</code> badge) drives everything: damage, blast size, how
+              many extra enemies it shreds, and how much charge it refunds. And a detonation <b>pumps
+              nearby armed mines — the bigger the mine you set off, the bigger the boost</b> (a 4× lifts a
+              1× to 3×), so one fat mine snowballs the whole cluster. The HUD <b>Mines</b> counter is your
+              ammo for <em>both</em> jobs — budget it.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon" style="color:var(--energy)">⌇</span>
