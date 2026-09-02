@@ -103,17 +103,17 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 15,
     height: 15,
     mineCount: 34,
-    hookCount: 30,
+    hookCount: 24,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
-    bossHp: 7,
+    bossHp: 9,
     bossShieldCharges: 3,
     bossShieldRegenMoves: 5, // easy: 1 charge back every 5 idle moves
     parSeconds: 50,
     goldSeconds: 30,
     silverSeconds: 38,
     bronzeSeconds: 50,
-    startingCharge: 18, // small: you start able to tap only a little; detonations fund the rest
+    startingCharge: 15, // small: you start able to tap only a little; detonations fund the rest
     maxPlayerCharge: 40, // the ceiling you can EARN back up to by detonating (start is well below it)
     chargeRegenPerSecond: 0, // earned, not regenerated: detonate mines to fund tapping
     stackCap: 6,
@@ -129,17 +129,17 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 17,
     height: 17,
     mineCount: 42,
-    hookCount: 45,
+    hookCount: 34,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
-    bossHp: 22,
+    bossHp: 15,
     bossShieldCharges: 3,
     bossShieldRegenMoves: 4, // standard: 1 charge back every 4 idle moves
     parSeconds: 66,
     goldSeconds: 44,
     silverSeconds: 54,
     bronzeSeconds: 66,
-    startingCharge: 22, // small: you start able to tap only a little; detonations fund the rest
+    startingCharge: 19, // small: you start able to tap only a little; detonations fund the rest
     maxPlayerCharge: 48, // the ceiling you can EARN back up to by detonating (start is well below it)
     chargeRegenPerSecond: 0,
     stackCap: 7,
@@ -155,17 +155,17 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     width: 21,
     height: 21,
     mineCount: 62, // ~14% of 441
-    hookCount: 70,
+    hookCount: 52,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.24,
-    bossHp: 34,
+    bossHp: 21,
     bossShieldCharges: 3,
     bossShieldRegenMoves: 3, // hard: 1 charge back every 3 idle moves
     parSeconds: 90,
     goldSeconds: 60,
     silverSeconds: 74,
     bronzeSeconds: 90,
-    startingCharge: 26, // small: you start able to tap only a little; detonations fund the rest
+    startingCharge: 23, // small: you start able to tap only a little; detonations fund the rest
     maxPlayerCharge: 56, // the ceiling you can EARN back up to by detonating (start is well below it)
     chargeRegenPerSecond: 0,
     stackCap: 8,

@@ -374,6 +374,7 @@ class Engine implements MinesweeperEngine {
     const events: GameEvent[] = []
     this.bossHitThisAction = false
     this.hookCharges -= 1
+    this.setPlayerCharge(this.playerCharge - 1, events) // hooks draw on the charge budget too
     this.moveMine(mine, dest, events)
     events.push({ kind: 'hookUsed', from: { x: coord.x, y: coord.y }, to: { x: dest.x, y: dest.y }, charges: this.hookCharges })
     this.checkEnd(events)

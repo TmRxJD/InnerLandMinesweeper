@@ -331,13 +331,23 @@ describe('boss shield', () => {
       expect(engine.snapshot().bossShield).toBe(sh0 - 1)
       expect(engine.snapshot().bossHp).toBe(hp0) // shield took it — HP is safe behind it
 
-      // Now neglect the Boss: reveal covered GROUND tiles far from it. Past the delay the shield
-      // regrows. Do delay+regen-back-to-full worth of no-Boss-damage moves.
-      const far = truth(`shield-${i}`).tiles.filter(t => !t.isMine && t.tier !== 'boss' && chb(t.x, t.y) > 3)
+      // Now neglect the Boss with idle moves (no Boss damage). Reveals cost charge (and hooks drained
+      // it while parking), so drive the idle moves with SAFE far detonations where possible — a mine
+      // whose blast can't reach the Boss (cheb > radius+1) refuels charge AND counts as a neglect move
+      // — falling back to a paid reveal. Past the regen interval the shield regrows.
       const shieldLow = engine.snapshot().bossShield
+      const bossSafe = (m: { coord: Coord; mineCharge?: number }) =>
+        chb(m.coord.x, m.coord.y) > blastRadiusForStack(m.mineCharge ?? 1, cfg.blastRadiusCap) + 1
       let regrew = false
-      for (const t of far.slice(0, cfg.bossShieldRegenMoves + 4)) {
-        engine.reveal({ x: t.x, y: t.y })
+      for (let k = 0; k < cfg.bossShieldRegenMoves + 8; k++) {
+        const s = engine.snapshot()
+        const farMine = s.tiles.find(t => t.state === 'armed' && bossSafe(t))
+        if (farMine) engine.detonate(farMine.coord)
+        else {
+          const g = s.tiles.find(t => (t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss' && chb(t.coord.x, t.coord.y) > 3)
+          if (g && s.playerCharge >= 1) engine.reveal(g.coord)
+          else break
+        }
         if (engine.snapshot().bossShield > shieldLow) { regrew = true; break }
       }
       expect(regrew).toBe(true) // neglect let the shield heal back up

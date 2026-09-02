@@ -12,7 +12,9 @@
 import { createEngine } from '../engine/engine'
 import { DIFFICULTIES } from '../engine/tuning'
 import { randomSeed } from '../engine/rng'
-import { autoPlay } from '../engine/auto-player'
+import { chooseAction } from '../engine/mcts'
+import type { AutoAction } from '../engine/auto-player'
+import { Rng } from '../engine/rng'
 import type { BoardSnapshot, Coord, Difficulty, EventList, GameResult, MinesweeperEngine, Tier, TileView } from '../engine/types'
 import { FxLayer } from './fx-layer'
 
@@ -803,11 +805,22 @@ export class GameApp {
     this.setHintTarget(hint.target)
   }
 
-  /** A meaningful, situation-specific hint: it asks the reference player what it would do next on
-   *  THIS board and turns that into advice, pointing at the tile (highlighted) for the safe cases.
-   *  Reveal targets are never highlighted — that would spoil a hidden mine's location. */
+  /** The intelligent next move — a Monte Carlo Tree Search that clones the live game and plays out
+   *  many futures, so it reasons about outcomes ("detonate the mine to clear those three tiles",
+   *  "hook this one through the enemy in the way") instead of following brittle rules. Seeded from the
+   *  exact position + a fixed iteration count, so it is DETERMINISTIC: the coach hint and Autoplay call
+   *  this and get the identical move — the ring you see is exactly what Autoplay would do. */
+  private planAction(): AutoAction | null {
+    const s = this.engine.snapshot()
+    const seedRng = new Rng(`${s.moves}|${s.minesRemaining}|${s.bossHp}|${s.bossShield}|${s.hookCharges}|${Math.round(s.playerCharge)}`)
+    return chooseAction(this.engine, { iterations: 60, rng: () => seedRng.float() })
+  }
+
+  /** A meaningful, situation-specific hint: it asks the planner what to do next on THIS board and
+   *  turns that into advice, pointing at the tile (highlighted) for the safe cases. Reveal targets are
+   *  never highlighted — that would spoil a hidden mine's location. */
   private coachHint(snap: BoardSnapshot): { msg: string; target: number | null } {
-    const action = autoPlay(snap)
+    const action = this.planAction()
     const w = snap.width
     const bx = Math.floor(w / 2)
     const by = Math.floor(snap.height / 2)
@@ -1055,10 +1068,10 @@ export class GameApp {
     this.demoUsedThisGame = true
     const snap = this.engine.snapshot()
     if (snap.status !== 'playing') return this.demoRestart(2400) // won/lost — next board
-    // The demo plays the SAME move the Hints point at — both come from autoPlay(snap) — so watching
-    // Autoplay is watching the coach's advice carried out, tile by tile. (The MCTS planner is still
-    // in the repo for the harness/experiments, but the demo and the hint must never disagree.)
-    const action = autoPlay(snap)
+    // The demo plays the intelligent planned move — the SAME deterministic MCTS the Hints point at —
+    // so watching Autoplay is watching the coach's advice carried out, tile by tile, by a search that
+    // actually reasons about outcomes rather than a rule-following script.
+    const action = this.planAction()
     if (!action) return this.demoRestart(1200) // no move — next board
 
     const sigBefore = this.progressSig(snap)
