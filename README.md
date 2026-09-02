@@ -30,7 +30,9 @@ src/
     types.ts     The contract: TileView, BoardSnapshot, GameEvent, GameResult, MinesweeperEngine.
     engine.ts    createEngine — reveal / detonate / useHook / tick, emits an ordered EventList.
     board.ts     Seeded board generation (corner opening, non-touching killer wedge, hook tiles).
-    auto-player.ts  The reference bot: clear → gather-when-needed → escalating chain.
+    auto-player.ts  Heuristic reference: clear → gather-when-needed → escalating chain (harness + MCTS rollouts).
+    mcts.ts      The AI that drives in-game Autoplay: Monte Carlo Tree Search — clones the game and
+                 searches simulated futures, so it reasons per move and plays variedly, not by rules.
     tuning.ts    Every playtest-deferred number, per difficulty, in one place.
     rng.ts       Deterministic seeded RNG.  index.ts  Public barrel — import from here.
   ui/         Vanilla-TS view: DOM board + one canvas FX overlay, driven by the engine's events.

@@ -188,4 +188,8 @@ export interface MinesweeperEngine {
   tick(deltaSeconds: number): EventList
   snapshot(): BoardSnapshot
   result(): GameResult | null
+  /** A deep, independent copy of the current game state. The planning AI (MCTS) clones the live
+   *  game, plays hypothetical moves on the copy to see how they turn out, and throws it away — the
+   *  real game is never touched. */
+  clone(): MinesweeperEngine
 }

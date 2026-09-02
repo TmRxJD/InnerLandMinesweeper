@@ -12,7 +12,7 @@
 import { createEngine } from '../engine/engine'
 import { DIFFICULTIES } from '../engine/tuning'
 import { randomSeed } from '../engine/rng'
-import { autoPlay } from '../engine/auto-player'
+import { chooseAction } from '../engine/mcts'
 import type { BoardSnapshot, Coord, Difficulty, EventList, GameResult, MinesweeperEngine, Tier, TileView } from '../engine/types'
 import { FxLayer } from './fx-layer'
 
@@ -735,8 +735,11 @@ export class GameApp {
     if (!this.demo) return
     const snap = this.engine.snapshot()
     if (snap.status !== 'playing') return this.demoRestart(2400) // won/lost — next board
-    const action = autoPlay(snap)
-    if (!action) return this.demoRestart(1200) // bot gave up — next board
+    // The demo is driven by the MCTS planner, not the heuristic — it searches from the live position
+    // each move. A wall-clock budget keeps the thinking snappy (hidden under the cursor glide) so the
+    // board stays responsive; the choice still emerges from simulated futures, so it plays variedly.
+    const action = chooseAction(this.engine, { timeBudgetMs: 90 })
+    if (!action) return this.demoRestart(1200) // no move — next board
 
     const sigBefore = this.progressSig(snap)
     this.moveCursorTo(action.coord)

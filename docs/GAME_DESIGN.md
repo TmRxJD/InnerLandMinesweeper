@@ -219,7 +219,13 @@ difficulty (see Balance status), and the "blind prober" **completes 0%**.
   runs alongside two references: **`noHook`** — the same player with gathering switched off, whose
   finish-rate measures how hook-dependent each difficulty is — and the **blind prober**, which can't
   kill the blast-only Boss at all.
-- **Watch-demo** — the same reference bot plays the real UI hands-off.
+- **Autoplay (in-game)** — driven by a genuine **Monte Carlo Tree Search** planner (`mcts.ts`), not
+  the heuristic: each move it clones the live game and simulates many possible futures, letting the
+  choice emerge from which ones turn out best (UCB balances exploiting the current-best line against
+  exploring alternatives; the heuristic is reused only as the fast *playout policy* that finishes a
+  hypothetical game so it can be scored). It plays *better* than the heuristic everywhere (72 / 98 /
+  133 s vs 96 / 130 / 162) and, thanks to randomised exploration, differently every run — it reasons
+  afresh rather than replaying a script. A wall-clock budget per move keeps the live demo responsive.
 
 The game is a **standalone repo**, to be embedded in the Tower Run Tracker later via `GameResult` —
 the engine knows nothing about the host.

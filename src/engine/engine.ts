@@ -58,6 +58,23 @@ class Engine implements MinesweeperEngine {
     this.playerCharge = this.cfg.startingCharge
   }
 
+  /** Deep, independent copy for hypothetical play (see the interface). Shares the immutable config
+   *  and per-tile identity is broken by copying every tile — the only deeply-mutated state — so
+   *  applying moves to the copy never touches this instance. Bypasses board generation entirely. */
+  clone(): MinesweeperEngine {
+    const copy = Object.create(Engine.prototype) as Engine
+    Object.assign(copy, this, {
+      board: {
+        width: this.board.width,
+        height: this.board.height,
+        opening: this.board.opening,
+        mineCount: this.board.mineCount,
+        tiles: this.board.tiles.map(t => ({ ...t })),
+      },
+    })
+    return copy
+  }
+
   // -- public surface ------------------------------------------------------
 
   reveal(coord: Coord): EventList {

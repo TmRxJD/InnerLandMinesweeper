@@ -346,6 +346,28 @@ describe('magnetic hook', () => {
   })
 })
 
+describe('clone', () => {
+  it('is a fully independent copy — moves on the clone never touch the original', () => {
+    const engine = createEngine({ difficulty: DIFF, seed: 'clone-seed' })
+    // Reveal a few tiles so there is real mutated state to (not) leak.
+    const board = truth('clone-seed')
+    for (const t of board.tiles.slice(0, 12)) engine.reveal({ x: t.x, y: t.y })
+    const original = JSON.stringify(engine.snapshot())
+
+    const copy = engine.clone()
+    expect(JSON.stringify(copy.snapshot())).toBe(original) // starts identical
+
+    // Drive the clone hard: reveal everything and detonate every armed mine.
+    for (const t of board.tiles) copy.reveal({ x: t.x, y: t.y })
+    for (const t of copy.snapshot().tiles) if (t.state === 'armed') copy.detonate(t.coord)
+
+    // The original is untouched.
+    expect(JSON.stringify(engine.snapshot())).toBe(original)
+    // The clone genuinely moved on.
+    expect(JSON.stringify(copy.snapshot())).not.toBe(original)
+  })
+})
+
 describe('blast radius scales with stack (capped)', () => {
   it('grows one ring every two stacks up to the cap', () => {
     expect(blastRadiusForStack(1, 3)).toBe(1)
