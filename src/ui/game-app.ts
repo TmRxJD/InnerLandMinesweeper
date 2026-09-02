@@ -280,21 +280,23 @@ export class GameApp {
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><span class="ilm-help__sprite" style="--sprite:url(${mineUrl})"></span></span>
             <div><b>Mines are your ammo — grow them.</b> Tap a hidden mine to <b>arm</b> it (safe); tap an
-              armed mine to <b>detonate</b> — a square blast clears its area for free, <b>arms the mines it
-              touches</b> (so blasts chain), and takes a few <b>extra enemies just outside it</b> with it.
-              A mine's <b>stack</b> (the <code>N×</code> badge) drives everything: damage, blast size, how
-              many extra enemies it shreds, and how much charge it refunds. And a detonation <b>pumps
-              nearby armed mines — the bigger the mine you set off, the bigger the boost</b> (a 4× lifts a
-              1× to 3×), so one fat mine snowballs the whole cluster. The HUD <b>Mines</b> counter is your
-              ammo for <em>both</em> jobs — budget it.</div>
+              armed mine to <b>detonate</b> — a square blast clears its area for free and takes a few
+              <b>extra enemies just outside it</b> with it. Every detonation is your choice: a blast does
+              <b>not</b> set off covered mines, so a <em>chain is a sequence YOU fire</em>, in the order you
+              pick. A mine's <b>stack</b> (the <code>N×</code> badge) drives everything: damage, blast size,
+              how many extra enemies it shreds, and how much charge it refunds. And a detonation <b>pumps
+              nearby ARMED mines — the bigger the mine you set off, the bigger the boost</b> (a 4× lifts a
+              1× to 3×), so uncover a cluster and fire it in order to snowball a fat mine. The HUD
+              <b>Mines</b> counter is your ammo for <em>both</em> jobs — budget it.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon" style="color:var(--energy)">⌇</span>
             <div><b>Magnetic Hook — you'll need it.</b> The Boss sits in a ring no blast can reach, so you
               <b>can't</b> just detonate near it. Clear a hidden <b style="color:var(--energy)">Magnetic
-              Hook</b> tile to gain a <b>Mag Hook</b> charge, then <b>drag</b> an armed mine one tile
-              (crushing whatever's there) or <b>right-click</b> / <b>long-press</b> to pull it toward the
-              Boss. Gather a cluster of charged mines against the Boss, then set them off.</div>
+              Hook</b> tile to gain a <b>Mag Hook</b> charge, then <b>long-press</b> / <b>right-click</b> /
+              <b>drag</b> an armed mine to pull it <b>one tile straight toward the Boss</b> — the direction
+              is automatic; you only choose <em>which</em> mine. It goes <b>through</b> enemies, crushing
+              whatever's in the way. Gather a cluster against the Boss, then set them off.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
@@ -593,12 +595,12 @@ export class GameApp {
       btn.setAttribute('role', 'gridcell')
       btn.tabIndex = i === 0 ? 0 : -1
       btn.addEventListener('click', () => this.onTileClick(t.coord))
-      // Drag an armed mine to a neighbour = directional hook. Record where a drag begins.
+      // Drag/activate an armed mine to hook it (the engine pulls it toward the Boss). Record drag start.
       btn.addEventListener('pointerdown', () => {
         const v = this.tileView(t.coord)
         this.dragStart = { coord: t.coord, armed: v?.state === 'armed' }
       })
-      // Right-click quick-pulls a hook toward the Boss (drag for a chosen direction — see below).
+      // Right-click / long-press / drag all hook the mine toward the Boss (direction is automatic).
       btn.addEventListener('contextmenu', e => {
         e.preventDefault()
         this.hookMine(t.coord, this.towardBoss(t.coord))
@@ -739,9 +741,9 @@ export class GameApp {
     this.pulseTile(coord, 'charge-up')
   }
 
-  /** Spend a hook charge to pull the armed mine at `coord` one tile in `dir`. A no-op with no
-   *  charge, on a non-armed tile, or a blocked target. Drag an armed mine to choose the direction;
-   *  a right-click / long-press with no direction defaults toward the Boss. */
+  /** Spend a hook charge to pull the armed mine at `coord` one tile STRAIGHT TOWARD THE BOSS (the
+   *  engine sets the direction; any `dir` passed is ignored). A no-op with no charge, on a non-armed
+   *  tile, or when a live mine / the Boss blocks the inward step. */
   private hookMine(coord: Coord, dir: Coord): void {
     if (this.demo) this.stopDemo()
     if (this.engine.snapshot().status !== 'playing' || this.paused) return

@@ -74,17 +74,21 @@ damage = stack                       (every tile in the square takes this)
 A single detonation does four things:
 
 1. **Vaporises** the 1-HP ground in its square (and deals `stack` to the Boss if in reach).
-2. **Blast-arm cascade** — arms any hidden mine and pumps any *armed* mine it touches (inside the
-   blast **or one ring beyond**), so detonations chain and mines never need to spawn touching.
-3. **Scaled overlap boost** — the pump a neighbouring mine receives *scales with the detonator's own
-   stack*: `overlapBoost = max(1, ⌊stack · 0.5⌋)`. A 1×/2×/3× passes **+1**, a **4× passes +2** (lifts
-   a 1× to 3×), a 6× passes +3. So one fat mine snowballs the whole cluster — building a big mine and
-   setting it off beside the blob is the engine of the game.
+2. **Pumps armed neighbours — NO automatic cascade.** A blast pumps any *already-armed* mine it touches
+   (inside the blast **or one ring beyond**), but it does **NOT** arm covered mines and does **not**
+   destroy them — a covered mine just sits until you uncover it yourself. Every mine you set off is a
+   **deliberate detonation**; a "chain" is the *sequence of detonations you choose*, not something that
+   propagates through the field on its own. You build stacks by uncovering a cluster and firing it in a
+   deliberate order.
+3. **Scaled overlap boost** — the pump a neighbouring *armed* mine receives *scales with the detonator's
+   own stack*: `overlapBoost = max(1, ⌊stack · 0.5⌋)`. A 1×/2×/3× passes **+1**, a **4× passes +2**
+   (lifts a 1× to 3×), a 6× passes +3. So one fat mine snowballs the whole cluster — building a big mine
+   and setting it off beside the blob is the engine of the game.
 4. **Shrapnel** — on top of its square, the blast takes `⌊stack · 1⌋` **extra** enemies with it from
    the ring just outside the blast. This is the field-clearing payoff for a big stack — a reason to
-   grow mines even away from the Boss. Its reach is **capped** (`shrapnelMaxReach = 3`) so a big mine's
-   shrapnel never lands beyond a full-size blast's footprint — it can shred a lot, but not across the
-   board. Shrapnel only ever hits ground (never mines or the Boss), so it can't cheese the kill.
+   grow mines even away from the Boss. Its reach is **capped** (`shrapnelMaxReach = 2`) so a big mine's
+   shrapnel stays close — it can shred a lot, but not across the board. Shrapnel only ever hits ground
+   (never mines or the Boss), so it can't cheese the kill.
 
 The Boss and mines are affected at the **extended (radius + 1) reach**; plain ground only at the true
 radius.
@@ -140,9 +144,10 @@ A single-use, earnable, repeatable delivery tool — the game's main expression 
   the centre). They are **not marked** — clearing a tile that hides one, by tap or blast, grants **+1
   hook charge** (the HUD **Mag Hooks** count ticks up; you can hold several). *(A dev/testing build can
   mark them: `?showhooks` in the browser, `--debug` in the CLI.)*
-- **Spend it.** **Drag** an armed mine one tile in any of 8 directions, or **right-click** /
-  **long-press** it for a quick pull toward the Boss. It slides into cleared ground or **crushes** the
-  1-HP enemy in the way (a free clear); it can't move onto another live mine, the Boss, or off-grid.
+- **Spend it.** Activate a hook on an armed mine (long-press / right-click / drag it) and it pulls the
+  mine **one tile STRAIGHT TOWARD THE BOSS** — the **direction is automatic, not yours to steer**. It
+  goes **through** the field, **crushing** any 1-HP enemy in the way (a free clear); it is blocked only
+  by another live mine or the Boss's own tile. You choose *which* mine to pull, never which direction.
 - **Numbers stay honest** — moving a mine updates the adjacent counts at both the old and new cell.
 
 You gather a cluster of charged mines against the Boss, then chain it — the shield and moat mean a
@@ -150,11 +155,12 @@ loose, un-gathered chain won't do.
 
 ---
 
-## Numbers stay honest
+## Numbers always show
 
-When a mine leaves a cell — detonated *or* hooked away — every adjacent revealed number updates.
-Numbers come only from tiles you cleared **by hand**; blast-vaporised (and shrapnel) tiles never
-reveal a number, so your information stays tied to the taps you chose to make.
+Every cleared ground tile shows its adjacent-mine count — **however it was cleared** (hand-tapped,
+blast-vaporised, shrapnel, or the cell a mine was hooked off of). The numbers stay **live**: when a
+mine leaves a cell — detonated *or* hooked away — every adjacent number updates at once. Deduction is
+the point of the game, so information is never hidden behind how a tile happened to be cleared.
 
 ---
 
@@ -187,13 +193,13 @@ seed → same board), which powers the CLI, the harness, and any future daily bo
 
 | Difficulty | Size | Mines | Hooks | Boss HP | Shield (charges · regen) | Stack cap | Start / Max charge | Par | Gold / Silver / Bronze |
 |---|---|---|---|---|---|---|---|---|---|
-| **Easy** (`gentle`) | 15×15 | 34 | 30 | 7 | 3 · 1/5 moves | 6 | 18 / 40 | 0:50 | ≤0:30 / ≤0:38 / ≤0:50 |
-| **Standard** | 17×17 | 42 | 45 | 22 | 3 · 1/4 moves | 7 | 22 / 48 | 1:06 | ≤0:44 / ≤0:54 / ≤1:06 |
-| **Hard** | 21×21 | 62 | 70 | 34 | 3 · 1/3 moves | 8 | 26 / 56 | 1:30 | ≤1:00 / ≤1:14 / ≤1:30 |
+| **Easy** (`gentle`) | 15×15 | 34 | 24 | 9 | 3 · 1/5 moves | 6 | 15 / 40 | 0:50 | ≤0:30 / ≤0:38 / ≤0:50 |
+| **Standard** | 17×17 | 42 | 34 | 15 | 3 · 1/4 moves | 7 | 19 / 48 | 1:06 | ≤0:44 / ≤0:54 / ≤1:06 |
+| **Hard** | 21×21 | 62 | 52 | 21 | 3 · 1/3 moves | 8 | 23 / 56 | 1:30 | ≤1:00 / ≤1:14 / ≤1:30 |
 
 Shared across difficulties: charge does **not** regenerate (earned by detonating, `round(stack·0.5)`
 per mine); blast-radius cap is 3; the overlap boost is `⌊stack·0.5⌋`; shrapnel is `⌊stack·1⌋` capped at
-Chebyshev 3; the shield is 3 charges regaining one per 5/4/3 idle moves; a tap costs 1 charge; mines are ~14% of the field.
+Chebyshev 2; the shield is 3 charges regaining one per 5/4/3 idle moves; a tap costs 1 charge; mines are ~14% of the field.
 
 Generation guarantees:
 
@@ -229,8 +235,8 @@ Generation guarantees:
 - **Speed harness** (`pnpm harness`) — plays the reference bots headlessly and reports finish rate,
   clear time, medal split, and hooks used, flagging any difficulty that's too punishing or cheesable.
   The reference bot budgets its mines against the ammo counter (reserve ~what the Boss needs, spend the
-  surplus clearing), gathers a squad to a Boss-adjacent rally point with directional hooks, and chains
-  it in a greedy order. Two references bracket it: **`noHook`** (gathering off — measures how
+  surplus clearing), gathers a squad toward the Boss with auto-toward-Boss hooks (the bot picks which
+  mine; the engine sets the direction), and chains it in a greedy order. Two references bracket it: **`noHook`** (gathering off — measures how
   hook-dependent each difficulty is) and the **blind prober** (random-ish play — measures cheese).
 - **Autoplay (in-game)** — plays the **same heuristic (`autoPlay`) the Hints use**, so watching Autoplay
   is watching the coach's advice carried out move for move. (A Monte Carlo Tree Search planner, `mcts.ts`,

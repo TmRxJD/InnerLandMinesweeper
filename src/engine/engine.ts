@@ -145,12 +145,12 @@ class Engine implements MinesweeperEngine {
     // 3. Removing the mine decrements neighbours' live counts so numbers stay accurate.
     this.decrementAround(tile, events)
 
-    // 4a. Affect mines AND the Boss one ring BEYOND the blast, not just inside it. A mine or the
-    //     Boss that merely NEIGHBOURS a blast tile is hit: a hidden mine arms, an armed mine gains
-    //     charge, and the Boss (the only multi-hit tile) takes `stack` damage. This "touching the
-    //     blast is enough" rule is what lets you play WITHOUT hooks — non-touching mines pump each
-    //     other, and a mine with a single empty tile between it and the Boss still chips it. Hooks
-    //     then become a way to build tighter, bigger chains for a better score, not a requirement.
+    // 4a. Affect ARMED mines AND the Boss one ring BEYOND the blast, not just inside it. An armed mine
+    //     or the Boss that merely NEIGHBOURS a blast tile is hit: an armed mine gains charge, and the
+    //     Boss (the only multi-hit tile) takes `stack` damage. A COVERED mine is NOT armed (and not
+    //     destroyed) — there is no automatic cascade; you uncover and detonate each mine yourself. The
+    //     "one ring beyond" reach means a mine a single empty tile from an armed neighbour still pumps
+    //     it, and one that close to the Boss still chips it, so deliberate chains stay flexible.
     for (const t of withinRadius(this.board, tile.x, tile.y, radius + 1)) {
       if (t.isMine) {
         // A blast pumps a neighbouring ARMED mine's stack (deliberate stack-building), but NEVER arms a
