@@ -131,11 +131,14 @@
 /* Charge pinned to the left, Time centred in the row (empty 3rd column balances it). */
 .ilm-stats {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: repeat(4, 1fr);
   align-items: start;
+  gap: 8px;
 }
 .ilm-stats .ilm-stat--charge { justify-self: start; }
 .ilm-stats .ilm-stat--time { justify-self: center; text-align: center; }
+.ilm-stats .ilm-stat--hook { justify-self: center; text-align: center; }
+.ilm-stats .ilm-stat--mines { justify-self: end; text-align: right; }
 .ilm-stats .ilm-stat--moves { justify-self: end; text-align: right; min-width: 0; }
 .ilm-stat--moves .ilm-stat__value { color: var(--ink-dim); }
 /* Controls stretch to evenly fill the row width, so text changes (Watch/Stop demo)
