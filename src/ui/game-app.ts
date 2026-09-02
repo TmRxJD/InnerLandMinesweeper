@@ -88,6 +88,7 @@ export class GameApp {
   private elChargeFill!: HTMLElement
   private elTime!: HTMLElement
   private elHookCount!: HTMLElement
+  private elMines!: HTMLElement
   private elBossBar!: HTMLElement
   private elBossFill!: HTMLElement
   private elBossHp!: HTMLElement
@@ -136,6 +137,7 @@ export class GameApp {
     this.elChargeFill = root.querySelector('.ilm-chargebar__fill')!
     this.elTime = root.querySelector('[data-time]')!
     this.elHookCount = root.querySelector('[data-hookcount]')!
+    this.elMines = root.querySelector('[data-mines]')!
     this.elBossBar = root.querySelector('[data-bossbar]')!
     this.elBossFill = root.querySelector('[data-bossfill]')!
     this.elBossHp = root.querySelector('[data-bosshp]')!
@@ -187,6 +189,10 @@ export class GameApp {
           <div class="ilm-stat ilm-stat--hook">
             <span class="ilm-stat__label">Mag Hooks</span>
             <span class="ilm-stat__value" data-hookcount>0</span>
+          </div>
+          <div class="ilm-stat ilm-stat--mines">
+            <span class="ilm-stat__label">Mines</span>
+            <span class="ilm-stat__value" data-mines>0</span>
           </div>
         </div>
         <div class="ilm-bossbar" data-bossbar hidden>
@@ -560,6 +566,7 @@ export class GameApp {
     this.elChargeFill.style.setProperty('--charge-pct', `${pct}%`)
     this.elTime.textContent = this.fmtTime(snap.timeElapsed)
     this.elHookCount.textContent = String(snap.hookCharges)
+    this.elMines.textContent = String(snap.minesRemaining)
     // Boss bar: show once the boss has taken a hit (it's covered/full at first).
     const bossPct = snap.bossMaxHp > 0 ? (snap.bossHp / snap.bossMaxHp) * 100 : 0
     this.elBossBar.hidden = snap.bossHp >= snap.bossMaxHp
