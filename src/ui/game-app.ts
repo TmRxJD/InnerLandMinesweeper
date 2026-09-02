@@ -238,44 +238,48 @@ export class GameApp {
         <div class="ilm-help__card">
           <button class="ilm-iconbtn ilm-help__close" data-help-close aria-label="Close">×</button>
           <h2 class="ilm-help__title">How to play</h2>
-          <p class="ilm-help__lead">Finding a mine is good — mines are your weapons. Clear the field
-            from the corner inward, build big mine stacks near the centre, and blast the <em>Boss</em>.
-            The clock is your score, not your enemy — finish fast.</p>
+          <p class="ilm-help__lead">Your mines are <b>one scarce pool</b> that has to do two jobs: clear
+            the field <em>and</em> kill the <em>Boss</em>. Spend too many opening the board and the Boss
+            outlives your ammo — the run is lost. It's a <b>speedrun</b>: after your first clear, the clock
+            counts <b>down</b> from your best time, so every game has to be faster than the last.</p>
 
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--ground">3</span>
             <div><b>Tap to clear.</b> Every field tile is a 1-HP enemy — one tap clears it and reveals
-              a number: how many mines touch it, like classic Minesweeper. Tapping costs <b>charge</b>
-              (it regenerates), so tap to find mines and open lanes — let blasts do the bulk clearing.
+              a number: how many mines touch it, like classic Minesweeper. Tapping spends <b>charge</b>,
+              and charge is a <b>fixed budget that does not regenerate</b>, so you can't hand-clear the
+              whole board. Tap to find mines and open lanes; let <b>blasts</b> do the bulk clearing.
               Colours are just enemy variety.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><span class="ilm-help__sprite" style="--sprite:url(${mineUrl})"></span></span>
-            <div><b>Mines are weapons.</b> Tap a hidden mine and it <b>arms</b> (safe). Tap an armed
-              mine to <b>detonate</b> — a square blast clears everything in it for free. A mine's
-              <b>stack</b> (the <code>N×</code> badge) sets both its damage and its blast size, and
-              <b>overlapping detonations pump nearby mines' stacks</b>. So detonate outward and grow
-              huge stacks on the mines nearest the centre.</div>
+            <div><b>Mines are your ammo.</b> Tap a hidden mine and it <b>arms</b> (safe); tap an armed
+              mine to <b>detonate</b> — a square blast clears everything in it for free and <b>arms the
+              mines it touches</b>, so detonations chain. A mine's <b>stack</b> (the <code>N×</code> badge)
+              sets its damage and blast size, and overlapping blasts pump nearby stacks. The <b>Mines</b>
+              counter in the HUD is how much ammo you have left for <em>both</em> jobs — budget it.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon" style="color:var(--energy)">⌇</span>
-            <div><b>Magnetic Hook.</b> Some tiles hide a <b style="color:var(--energy)">Magnetic Hook</b> —
-              clear them and your <b>Mag Hooks</b> count (in the HUD) ticks up. <b>Drag</b> an armed mine one
-              tile to pull it that way (crushing whatever's there), or <b>right-click</b> / <b>long-press</b>
-              to pull it toward the Boss. You don't strictly need them on easy boards, but on tougher ones
-              gathering mines into a tighter cluster is how you build a big enough blast to crack the Boss.</div>
+            <div><b>Magnetic Hook — you'll need it.</b> The Boss sits in a ring no blast can reach, so you
+              <b>can't</b> just detonate near it. Clear a hidden <b style="color:var(--energy)">Magnetic
+              Hook</b> tile to gain a <b>Mag Hook</b> charge, then <b>drag</b> an armed mine one tile
+              (crushing whatever's there) or <b>right-click</b> / <b>long-press</b> to pull it toward the
+              Boss. Gather a cluster of charged mines against the Boss, then set them off.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon"><img src="${enemyBoss}" alt="" class="ilm-help__sprite"></span>
             <div><b>The Boss</b> sits at the centre — the only multi-hit enemy, and <b>only mine blasts
-              hurt it</b> (taps do nothing). Build charged mines and detonate them next to it; a bigger
-              stack reaches further. Its HP bar shows at the top of the board.</div>
+              hurt it</b> (taps do nothing). Hook charged mines in beside it and detonate; a bigger stack
+              hits harder. Its HP bar shows at the top of the board.</div>
           </div>
           <div class="ilm-help__row">
             <span class="ilm-help__icon ilm-help__icon--flag">✓</span>
-            <div><b>Win</b> by clearing the field and killing the Boss. There's <b>no losing</b> — the
-              timer counts up and <b>is your score</b>. Beat the thresholds for
-              <b style="color:#ffd23f">gold</b> / silver / bronze.</div>
+            <div><b>Win</b> by clearing the field and killing the Boss — fast. You <b>lose</b> if you run
+              your mines dry with the Boss still alive, or if the <b>countdown to your best time</b> hits
+              zero. Your first game on a difficulty is untimed and sets the bar; beat it and the new time
+              becomes the one to chase. Clear times still earn <b style="color:#ffd23f">gold</b> /
+              silver / bronze.</div>
           </div>
 
           <p class="ilm-help__keys">Keyboard: arrow keys move · Enter / Space acts on the focused
