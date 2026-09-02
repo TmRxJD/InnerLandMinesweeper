@@ -73,31 +73,40 @@ function candidateActions(snap: BoardSnapshot, revealSamples: number, rng: () =>
 
   for (const m of armed) out.push({ type: 'detonate', coord: m.coord })
 
-  // Hook the handful of mines nearest the Boss toward it (delivery across the moat) and toward each
-  // other (to cluster for the chain). CRITICAL: only offer a hook whose destination is KNOWN-EMPTY
-  // (cleared/cracked ground or a detonated crater). A hook into the Boss, a live mine, or off-grid is
-  // a no-op — and because the search is deterministic, a no-op action would be re-picked forever
-  // (the ~1000× "hook into an armed mine" spin). Requiring known-empty destinations means the search
-  // clears a lane first, then routes mines down it.
+  // Hooks: a mine is ONLY ever pulled TOWARD the Boss, and only a mine that can't already strike it —
+  // so every hook is real delivery progress. Three guarantees kill the dumb behaviour you can watch:
+  //   1. strictly CLOSER (Chebyshev must drop) → never sideways, never away, and never oscillating
+  //      (a monotonic distance can't return a mine to a square it left);
+  //   2. only mines OUT of strike range → it stops fiddling with mines already gathered;
+  //   3. KNOWN-EMPTY destination (cleared/cracked/crater) → never a no-op into a live mine/Boss/edge
+  //      (a no-op would be re-picked forever by the deterministic search).
+  // One hook offered per mine (the best toward-Boss step), so the search picks WHICH mine to advance.
   const w0 = snap.width
-  const emptyDest = (m: TileView, dir: { x: number; y: number }): boolean => {
-    if (!dir.x && !dir.y) return false
-    const nx = m.coord.x + dir.x
-    const ny = m.coord.y + dir.y
-    const t = snap.tiles[ny * w0 + nx]
+  const cb = (x: number, y: number): number => Math.max(Math.abs(x - boss.x), Math.abs(y - boss.y))
+  const emptyAt = (x: number, y: number): boolean => {
+    const t = snap.tiles[y * w0 + x]
     if (!t || t.tier === 'boss') return false
     return t.state === 'cleared' || t.state === 'cracked' || t.state === 'detonated'
   }
-  if (snap.hookCharges >= 1 && armed.length > 0) {
-    const nearest6 = [...armed].sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, 6)
-    for (const m of nearest6) {
-      const toBoss = { x: Math.sign(boss.x - m.coord.x), y: Math.sign(boss.y - m.coord.y) }
-      if (emptyDest(m, toBoss)) out.push({ type: 'hook', coord: m.coord, dir: toBoss })
-      const mate = nearest(m, nearest6)
-      if (mate) {
-        const toMate = { x: Math.sign(mate.coord.x - m.coord.x), y: Math.sign(mate.coord.y - m.coord.y) }
-        if ((toMate.x !== toBoss.x || toMate.y !== toBoss.y) && emptyDest(m, toMate)) {
-          out.push({ type: 'hook', coord: m.coord, dir: toMate })
+  if (snap.hookCharges >= 1) {
+    const strike = snap.blastRadiusCap + 1
+    const outOfRange = armed
+      .filter(m => cb(m.coord.x, m.coord.y) > strike)
+      .sort((a, b) => cb(a.coord.x, a.coord.y) - cb(b.coord.x, b.coord.y))
+      .slice(0, 6)
+    for (const m of outOfRange) {
+      const sx = Math.sign(boss.x - m.coord.x)
+      const sy = Math.sign(boss.y - m.coord.y)
+      const cur = cb(m.coord.x, m.coord.y)
+      // diagonal first (closes both axes), then the two orthogonals — each strictly approaches
+      for (const d of [{ x: sx, y: sy }, { x: sx, y: 0 }, { x: 0, y: sy }]) {
+        if (!d.x && !d.y) continue
+        const nx = m.coord.x + d.x
+        const ny = m.coord.y + d.y
+        if (cb(nx, ny) >= cur) continue // must get closer to the Boss
+        if (emptyAt(nx, ny)) {
+          out.push({ type: 'hook', coord: m.coord, dir: d })
+          break // one good toward-Boss hook per mine
         }
       }
     }
@@ -122,20 +131,6 @@ function candidateActions(snap: BoardSnapshot, revealSamples: number, rng: () =>
   return out
 }
 
-/** The armed mine nearest to `m` (excluding itself), or null. */
-function nearest(m: TileView, pool: TileView[]): TileView | null {
-  let best: TileView | null = null
-  let bestD = Infinity
-  for (const o of pool) {
-    if (o === m) continue
-    const d = cheb(m.coord, o.coord)
-    if (d < bestD) {
-      bestD = d
-      best = o
-    }
-  }
-  return best
-}
 
 /** A random subset of `k` items (Fisher–Yates prefix). */
 function sample<T>(items: readonly T[], k: number, rng: () => number): T[] {
@@ -175,6 +170,7 @@ function evaluate(engine: MinesweeperEngine): number {
   let clusterValue = 0 // gathered killing power near the Boss, weighted by stack and proximity
   let biggestStack = 0
   let armedStackTotal = 0
+  const inRange: { x: number; y: number; stk: number }[] = [] // armed mines that can strike the Boss
   for (const t of s.tiles) {
     if (t.state === 'cleared' || t.state === 'detonated') clearedOrGone++
     else if (t.state === 'armed') {
@@ -185,8 +181,18 @@ function evaluate(engine: MinesweeperEngine): number {
       // In strike range → full value; otherwise decays with distance (a mine 3 rings out is worth
       // far less than one on the doorstep). This makes GATHERING toward the Boss score as progress.
       clusterValue += d <= strikeRange ? stk : stk / (1 + (d - strikeRange))
+      if (d <= strikeRange) inRange.push({ x: t.coord.x, y: t.coord.y, stk })
     }
   }
+  // Tightness: a TIGHT blob of in-range mines chains far better than the same mines with gaps between
+  // them (an overlapping detonation pumps its neighbours). Reward adjacency so it PACKS the cluster —
+  // hooking mines together — instead of leaving holes a chain would skip.
+  let tightness = 0
+  for (let i = 0; i < inRange.length; i++)
+    for (let j = i + 1; j < inRange.length; j++)
+      if (Math.max(Math.abs(inRange[i]!.x - inRange[j]!.x), Math.abs(inRange[i]!.y - inRange[j]!.y)) <= 1)
+        tightness += Math.min(inRange[i]!.stk, inRange[j]!.stk)
+
   const clearedFraction = clearedOrGone / s.tiles.length
   const bossFraction = s.bossMaxHp > 0 ? 1 - s.bossHp / s.bossMaxHp : 1
   const shieldStripped = s.bossShieldMax > 0 ? 1 - s.bossShield / s.bossShieldMax : 1
@@ -196,6 +202,7 @@ function evaluate(engine: MinesweeperEngine): number {
     bossFraction * 4000 + // HP damage is the other
     shieldStripped * 600 + // stripping the shield is real progress toward HP damage
     clusterValue * 90 + // a packed, in-range cluster is the thing that wins — reward building it
+    tightness * 70 + // adjacency within that cluster — pack it tight, no gaps, so it chains
     biggestStack * 40 + // growing a fat mine (overlap payoff) is progress
     armedStackTotal * 6 + // some armed ordnance on the board is good
     s.minesRemaining * 8 + // ammo in reserve
