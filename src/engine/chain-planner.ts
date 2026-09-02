@@ -73,9 +73,10 @@ export interface KeystoneResult {
  * first move of the returned sequence; the pumpers are ordnance you already have, so this costs no
  * hooks — only the finished keystone gets hooked to the Boss. Empty sequence when nothing pumps it.
  */
-export function buildKeystone(engine: MinesweeperEngine, keystone: Coord, opts: { beamWidth?: number; maxDepth?: number } = {}): KeystoneResult {
+export function buildKeystone(engine: MinesweeperEngine, keystone: Coord, opts: { beamWidth?: number; maxDepth?: number; exclude?: ReadonlySet<number> } = {}): KeystoneResult {
   const beamWidth = opts.beamWidth ?? 6
   const maxDepth = opts.maxDepth ?? 8
+  const exclude = opts.exclude
   const kKey = key(keystone)
   const stackOf = (s: BoardSnapshot): number => {
     const t = s.tiles.find(t => t.coord.x === keystone.x && t.coord.y === keystone.y)
@@ -90,6 +91,7 @@ export function buildKeystone(engine: MinesweeperEngine, keystone: Coord, opts: 
       if (sn.status !== 'playing') continue
       for (const t of sn.tiles) {
         if (t.state !== 'armed' || key(t.coord) === kKey) continue
+        if (exclude && exclude.has(key(t.coord))) continue // protected keystone — never spend it as a pumper
         const eng2 = node.eng.clone()
         eng2.detonate(t.coord)
         const kstack = stackOf(eng2.snapshot())

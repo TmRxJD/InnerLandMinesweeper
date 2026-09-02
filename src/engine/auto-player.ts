@@ -411,8 +411,8 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
 
   // 1. Boss campaign — chainStarter detonates outer squad mines to pump an inner keystone, then delivers
   //    it, when the squad is lethally gathered; otherwise, once the field surplus is spent, hook the
-  //    squad across the gap to finish it. The whole squad is reserved (below) so a field cascade never
-  //    detonates a mine mid-gather.
+  //    squad across the gap. The whole squad is reserved (below) so a field cascade never detonates a
+  //    mine mid-gather.
   if (bossAlive && squad.length > 0) {
     if (lethal) {
       const starter = chainStarter(squad, boss, snap)
