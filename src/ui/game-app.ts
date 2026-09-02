@@ -13,7 +13,7 @@ import { createEngine } from '../engine/engine'
 import { DIFFICULTIES } from '../engine/tuning'
 import { randomSeed } from '../engine/rng'
 import { chooseAction } from '../engine/mcts'
-import { autoPlay, type AutoAction } from '../engine/auto-player'
+import { planMove, type AutoAction } from '../engine/auto-player'
 import { Rng } from '../engine/rng'
 import type { BoardSnapshot, Coord, Difficulty, EventList, GameResult, MinesweeperEngine, Tier, TileView } from '../engine/types'
 import { FxLayer } from './fx-layer'
@@ -1054,7 +1054,7 @@ export class GameApp {
       const sim = createEngine({ difficulty: this.difficulty, seed, revealHooks: REVEAL_HOOKS })
       let m = 0
       for (; m < budget && sim.snapshot().status === 'playing'; m++) {
-        const a = autoPlay(sim.snapshot())
+        const a = planMove(sim)
         if (!a) break
         if (a.type === 'reveal') sim.reveal(a.coord)
         else if (a.type === 'hook') sim.useHook(a.coord, a.dir ?? { x: 0, y: 0 })
@@ -1115,12 +1115,11 @@ export class GameApp {
     // abandon it for a fresh clearable one rather than letting Autoplay grind for minutes.
     if (++this.demoMoves > this.demoMoveBudget()) return this.demoRestart(1200)
     // The demo plays the reference strategist (the same beam-verified player the balance harness
-    // validates): clear the field outward, groom a keystone mine, pump it with overlapping detonations,
-    // then hook the packed cluster into the Boss and unload the chain. It commits to that plan rather
-    // than re-searching every move, so the campaign reads as deliberate — and because it is the EXACT
-    // player demoSeed pre-clears the board with, the showcase reliably reaches the kill instead of
-    // stalling out on a board a per-move search would have thrown away.
-    const action = autoPlay(snap)
+    // validates): it reasons about CHAINS — searches detonation orders for the cleanest cascade that
+    // clears the most enemies per mine, and hooks a squad across the centre gap to unload a building
+    // chain into the Boss. It is the EXACT player demoSeed pre-clears the board with, so the showcase
+    // reliably reaches the kill. `planMove` takes the live engine (the chain search clones it forward).
+    const action = planMove(this.engine)
     if (!action) return this.demoRestart(1200) // no move — next board
 
     const sigBefore = this.progressSig(snap)

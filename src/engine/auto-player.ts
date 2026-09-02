@@ -9,7 +9,8 @@
  */
 
 import { blastRadiusForStack, overlapBoost } from './tuning'
-import type { BoardSnapshot, Coord, TileView } from './types'
+import { bestChain } from './chain-planner'
+import type { BoardSnapshot, Coord, MinesweeperEngine, TileView } from './types'
 
 export interface AutoAction {
   readonly type: 'reveal' | 'detonate' | 'hook'
@@ -30,63 +31,17 @@ function cheb(a: Coord, b: Coord): number {
 function bossCoord(snap: BoardSnapshot): Coord {
   return { x: (snap.width - 1) / 2 | 0, y: (snap.height - 1) / 2 | 0 }
 }
-/** How much FRESH ground a detonation actually clears — the real measure of a mine's worth as a
- *  board-clearer, and the number the "clear efficiently" strategy is built on. A stack-1 pop in a
- *  bare corner scores ~0 here and is refused; a fat mine dropped on a dense crowd scores high, because
- *  its radius grows with the stack AND it takes `floor(stack·shrapnelPerStack)` more from the ring
- *  outside. So maximising this naturally prefers big blasts on packed ground over scattered small pops
- *  — fewer, bigger, deliberate detonations that spend the pool slowly. Armed neighbours it would pump
- *  count too (lightly): detonating to fatten a neighbour is legitimate stack-building, not waste. */
+/** How much covered ground a detonation would clear (its own value as a board-clearer). */
 function clearValue(mine: TileView, snap: BoardSnapshot): number {
-  const stack = mine.mineCharge ?? 1
-  const radius = blastRadiusForStack(stack, snap.blastRadiusCap)
-  const isEnemy = (t: TileView): boolean => (t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss'
-  let fresh = 0 // covered enemies inside the blast radius (vaporised outright)
-  let ringCovered = 0 // covered enemies one ring out (candidates for shrapnel)
-  let pumps = 0 // armed neighbours this blast would charge up (stack-building)
+  const radius = blastRadiusForStack(mine.mineCharge ?? 1, snap.blastRadiusCap)
+  let value = 0
   for (const t of snap.tiles) {
     if (t.coord.x === mine.coord.x && t.coord.y === mine.coord.y) continue
-    const d = cheb(mine.coord, t.coord)
-    if (d <= radius) {
-      if (isEnemy(t)) fresh += 1
-    } else if (d === radius + 1) {
-      if (isEnemy(t)) ringCovered += 1
-      else if (t.state === 'armed') pumps += 1 // touched neighbour gets overlap-boosted
-    }
+    if (cheb(mine.coord, t.coord) > radius) continue
+    if ((t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss') value += 1
+    else if (t.state === 'armed') value += 1 // overlap-charges it / chains
   }
-  const shrapnelReach = Math.min(radius + 1, snap.shrapnelMaxReach)
-  const shrapnel = shrapnelReach > radius ? Math.min(Math.floor(stack * snap.shrapnelPerStack), ringCovered) : 0
-  return fresh + shrapnel + pumps * 0.75
-}
-
-/** The 8 neighbours of a cell that are on the board. */
-function neighbours8(snap: BoardSnapshot, x: number, y: number): TileView[] {
-  const out: TileView[] = []
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++) {
-      if (!dx && !dy) continue
-      const t = snap.tiles[(y + dy) * snap.width + (x + dx)]
-      if (t && y + dy >= 0 && y + dy < snap.height && x + dx >= 0 && x + dx < snap.width) out.push(t)
-    }
-  return out
-}
-
-/** A covered tile that is PROVABLY a mine by the revealed numbers — a cleared neighbour whose count,
- *  minus the mines already armed around it, exactly equals its remaining covered neighbours (so all of
- *  them must be mines). Revealing such a tile ARMS it for free (revealing a mine costs no charge),
- *  which is the escape from the charge dead-end: broke, with covered tiles left and nothing armed to
- *  refuel from, the bot can still deduce a mine, arm it, and detonate it for fuel. Null when nothing is
- *  forced (the numbers leave it ambiguous). */
-function findForcedMine(snap: BoardSnapshot): TileView | null {
-  for (const t of snap.tiles) {
-    if (t.state !== 'cleared' || t.number === undefined || t.number <= 0) continue
-    const nbrs = neighbours8(snap, t.coord.x, t.coord.y)
-    const covered = nbrs.filter(n => n.state === 'covered')
-    if (covered.length === 0) continue
-    const armed = nbrs.filter(n => n.state === 'armed').length
-    if (t.number - armed === covered.length) return covered[0]! // every covered neighbour is a mine
-  }
-  return null
+  return value
 }
 
 function bestBy(mines: TileView[], score: (m: TileView) => number): TileView | null {
@@ -245,34 +200,17 @@ function clearedNeighbourCount(t: TileView, snap: BoardSnapshot): number {
   return n
 }
 
-/** Crude Minesweeper mine-probability for a covered tile, read off the revealed numbers around it: for
- *  each adjacent cleared number, the mines it still needs spread evenly over its covered neighbours. A
- *  tile next to a "3" that has exactly three covered neighbours scores ~3 (a certain mine); a tile no
- *  number touches scores 0. Why it matters: revealing a covered MINE costs no charge (it just arms),
- *  while revealing ground costs a charge — so uncovering the LIKELY mines first arms fuel/ordnance for
- *  free instead of tapping the charge away on ground, which is what left the bot broke and grinding. */
-function mineLikelihood(t: TileView, snap: BoardSnapshot): number {
-  let score = 0
-  for (const n of neighbours8(snap, t.coord.x, t.coord.y)) {
-    if (n.state !== 'cleared' || n.number === undefined || n.number <= 0) continue
-    const nn = neighbours8(snap, n.coord.x, n.coord.y)
-    const covered = nn.filter(c => c.state === 'covered').length
-    const armed = nn.filter(c => c.state === 'armed').length
-    const need = n.number - armed
-    if (need > 0 && covered > 0) score += need / covered
-  }
-  return score
-}
-
-/** Choose the next tile to uncover. Prefer a tile the numbers say is a MINE — arming it is free (no
- *  charge) and hands the bot fuel and chain-building ordnance, instead of spending charge tapping
- *  ground. Ties, and tiles no number constrains, fall back to the most cleared-enclosed frontier tile,
- *  so the explored area still grows as one connected blob (never a teleporting cursor) and blasts feed
- *  it. This deduction is what keeps charge healthy without any passive regen. */
+/** Choose the next tile to uncover with intent instead of scanning rows. Among the frontier (tiles
+ *  touching already-cleared ground — so the explored area grows as one connected region, never a
+ *  teleporting cursor) prefer the tile boxed in by the MOST cleared neighbours. That fills concave
+ *  pockets first and grows the cleared area as a smooth, rounded blob — it reads as a player working
+ *  a region rather than a cursor scanning left-to-right — and it's actually *faster* than a row scan,
+ *  because a compact front feeds the blast-clears better. (A centre-ward bias was tried and dropped:
+ *  it dragged the front inward and slowed the clear badly, especially on the big Hard board.) */
 function pickReveal(tappable: TileView[], snap: BoardSnapshot): TileView | null {
   const frontier = tappable.filter(t => hasRevealedNeighbour(t, snap, snap.width))
   const pool = frontier.length > 0 ? frontier : tappable
-  return bestBy(pool, t => mineLikelihood(t, snap) * 12 + clearedNeighbourCount(t, snap))
+  return bestBy(pool, t => clearedNeighbourCount(t, snap))
 }
 
 /** One move for the given board, or null if there is nothing useful to do right now.
@@ -339,33 +277,11 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
     }
   }
 
-  // === Clearing (only while surplus mines remain to spend). Detonate the FIELD mine that clears the
-  //     MOST fresh ground — a big blast on a dense crowd — and NEVER a mine that clears less than a
-  //     real crowd (that stack-1-in-a-corner pop is exactly what drained the pool and looked random).
-  //     Below the threshold there's nothing worth a mine: fall through and TAP (charge is pool-safe,
-  //     mines are not). The near-Boss squad is spared — those are the killers, not clearers. ===
-  const squadKeys = new Set(squad.map(m => m.coord.y * snap.width + m.coord.x))
-  const fieldMines = mines.filter(m => !squadKeys.has(m.coord.y * snap.width + m.coord.x))
-  // Detonating is the only way to EARN charge (tapping only spends it), so clearing must stay
-  // detonation-led or the pool of charge dead-ends at zero with covered tiles left. So the bar is
-  // low — skip only a near-useless pop — and the discipline comes from the SELECTION below (biggest
-  // fresh crowd first, squad spared, pump-building preferred), not from refusing to detonate.
-  const CLEAR_THRESHOLD = 1
+  // === Clearing (only while surplus mines remain to spend). Prefer detonating a FAR mine (keep near
+  //     ones for the squad) that opens the most ground; the blast refuels charge too. ===
   if (surplus > 1) {
-    const pool = fieldMines.filter(m => clearValue(m, snap) >= CLEAR_THRESHOLD)
-    // Purely the biggest fresh crowd — no distance bias. (A faint far-bias used to nudge every clear
-    // toward the edges, which read as "obsessed with corners"; clearValue already rewards pumping a
-    // neighbour, so stack-building is what breaks ties, not position.)
-    const c = bestBy(pool, m => clearValue(m, snap))
+    const c = bestBy(mines.filter(m => clearValue(m, snap) > 0), m => clearValue(m, snap) + cheb(m.coord, boss) * 0.4)
     if (c) return { type: 'detonate', coord: c.coord }
-  }
-
-  // Fuel-starved: before spending scarce charge tapping ground, arm a FREE deduced mine (mine reveals
-  // cost no charge) so there's ordnance to detonate for a refuel. Keeps the earned-charge economy
-  // flowing instead of tapping down to empty.
-  if (snap.playerCharge < 3) {
-    const forced = findForcedMine(snap)
-    if (forced) return { type: 'reveal', coord: forced.coord }
   }
 
   // Tap the frontier to uncover ground / find more mines, while charge allows.
@@ -377,7 +293,7 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
   // Broke with ground left: no regen — refuel by detonating a mine, IF we still have surplus to spend
   // (prefer a far one). Out of surplus and out of charge → nothing but the squad remains: stuck.
   if (tappable.length > 0 && surplus > 0) {
-    const refuel = bestBy(mines, m => clearValue(m, snap) * 2 + (m.mineCharge ?? 1))
+    const refuel = bestBy(mines, m => clearValue(m, snap) * 2 + (m.mineCharge ?? 1) + cheb(m.coord, boss) * 0.4)
     if (refuel) return { type: 'detonate', coord: refuel.coord }
   }
 
@@ -410,20 +326,139 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
     const pick = pickReveal(tappable, snap)
     if (pick) return { type: 'reveal', coord: pick.coord }
   }
-  // Broke, nothing armed, covered tiles left: deduce a forced mine and ARM IT FOR FREE (a mine reveal
-  // costs no charge). Next move detonates it for fuel. This is the escape that stops the charge
-  // dead-end from freezing the run — without it the bot returned null here and the game hung.
+  return null
+}
+
+/** The 8 neighbours of a cell that are on the board. */
+function neighbours8(snap: BoardSnapshot, x: number, y: number): TileView[] {
+  const out: TileView[] = []
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue
+      const t = snap.tiles[(y + dy) * snap.width + (x + dx)]
+      if (t && y + dy >= 0 && y + dy < snap.height && x + dx >= 0 && x + dx < snap.width) out.push(t)
+    }
+  return out
+}
+
+/** A covered tile that is PROVABLY a mine by the revealed numbers — a cleared neighbour whose count,
+ *  minus the mines already armed around it, exactly equals its remaining covered neighbours (so all of
+ *  them must be mines). Revealing such a tile ARMS it for free (revealing a mine costs no charge),
+ *  which is the escape from the charge dead-end: broke, with covered tiles left and nothing armed to
+ *  refuel from, the bot can still deduce a mine, arm it, and detonate it for fuel. Null when nothing is
+ *  forced (the numbers leave it ambiguous). */
+function findForcedMine(snap: BoardSnapshot): TileView | null {
+  for (const t of snap.tiles) {
+    if (t.state !== 'cleared' || t.number === undefined || t.number <= 0) continue
+    const nbrs = neighbours8(snap, t.coord.x, t.coord.y)
+    const covered = nbrs.filter(n => n.state === 'covered')
+    if (covered.length === 0) continue
+    const armed = nbrs.filter(n => n.state === 'armed').length
+    if (t.number - armed === covered.length) return covered[0]! // every covered neighbour is a mine
+  }
+  return null
+}
+
+/** Crude Minesweeper mine-probability for a covered tile, read off the revealed numbers around it: for
+ *  each adjacent cleared number, the mines it still needs spread evenly over its covered neighbours. A
+ *  tile next to a "3" that has exactly three covered neighbours scores ~3 (a certain mine); a tile no
+ *  number touches scores 0. Why it matters: revealing a covered MINE costs no charge (it just arms),
+ *  while revealing ground costs a charge — so uncovering the LIKELY mines first arms fuel/ordnance for
+ *  free instead of tapping the charge away on ground, which is what left the bot broke and grinding. */
+function mineLikelihood(t: TileView, snap: BoardSnapshot): number {
+  let score = 0
+  for (const n of neighbours8(snap, t.coord.x, t.coord.y)) {
+    if (n.state !== 'cleared' || n.number === undefined || n.number <= 0) continue
+    const nn = neighbours8(snap, n.coord.x, n.coord.y)
+    const covered = nn.filter(c => c.state === 'covered').length
+    const armed = nn.filter(c => c.state === 'armed').length
+    const need = n.number - armed
+    if (need > 0 && covered > 0) score += need / covered
+  }
+  return score
+}
+
+/** Reveal aimed at ARMING the next cascade, not sweeping the board: prefer a tile the numbers say is a
+ *  mine (free arm), otherwise a frontier tile out at the mine ring (just past the empty centre, where
+ *  the ordnance actually is) so a few reveals reach live mines instead of burning charge on dead
+ *  central ground. */
+function revealForAmmo(snap: BoardSnapshot, boss: Coord): Coord | null {
+  const covered = snap.tiles.filter(t => (t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss')
+  const frontier = covered.filter(t => hasRevealedNeighbour(t, snap, snap.width))
+  const pool = frontier.length > 0 ? frontier : covered
+  const ring = snap.gatherRadius + 2
+  const pick = bestBy(pool, t => mineLikelihood(t, snap) * 100 - Math.abs(cheb(t.coord, boss) - ring))
+  return pick ? pick.coord : null
+}
+
+/**
+ * The real planner — the "smarter evaluation" the greedy `autoPlay` never had. It reasons about CHAINS,
+ * not tiles: `bestChain` searches detonation orders (on cloned engines, so the cascade is exact) for the
+ * sequence that removes the most enemies per mine spent, and the planner plays toward setting those up.
+ *
+ * Priority, each move:
+ *   1. Deliver the Boss kill when the gathered squad is lethal, else hook the squad across the gap —
+ *      the beam-verified campaign the greedy player already got right (unchanged).
+ *   2. Fire the cleanest FIELD cascade (the squad reserved) — the mine game, not tile-sweeping.
+ *   3. Reveal only to ARM the next cascade, out at the mine ring.
+ *   4. Never-stall fallbacks (a weaker chain, a deduced/fished mine).
+ *
+ * Takes the live engine (not a snapshot) because the chain search clones and plays forward.
+ */
+export function planMove(engine: MinesweeperEngine): AutoAction | null {
+  const snap = engine.snapshot()
+  if (snap.status !== 'playing') return null
+  const boss = bossCoord(snap)
+  const mines = armedMines(snap)
+  const bossAlive = snap.bossHp > 0
+  const need = Math.ceil(Math.sqrt(2 * snap.bossHp)) + 2 + snap.bossShield
+  const surplus = snap.minesRemaining - need
+  const squad = [...mines].sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, need)
+  const squadKeys = new Set(squad.map(m => m.coord.y * snap.width + m.coord.x))
+  const canHitBoss = (m: TileView): boolean =>
+    cheb(m.coord, boss) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1
+  const lethal = squad.length > 0 && predictChainDamage(squad, boss, snap) >= snap.bossHp
+
+  // 1. Boss delivery — unchanged campaign: fire when lethally gathered, else (committed) hook the squad in.
+  if (bossAlive && squad.length > 0) {
+    if (lethal) {
+      const starter = chainStarter(squad, boss, snap)
+      if (starter && canHitBoss(starter)) return { type: 'detonate', coord: starter.coord }
+      if (snap.hookCharges >= 1) {
+        const g = gatherMove(squad, boss, snap)
+        if (g) return g
+      }
+    } else if (surplus <= 1 && snap.hookCharges >= 1) {
+      const g = gatherMove(squad, boss, snap)
+      if (g) return g
+    }
+  }
+
+  // 2. Field cascade — the cleanest detonation order among field mines (squad spared while the Boss
+  //    lives; once it's dead every mine is free to finish the ground).
+  const exclude = bossAlive ? squadKeys : new Set<number>()
+  const chain = bestChain(engine, { exclude })
+  const haveCovered = snap.tiles.some(t => (t.state === 'covered' || t.state === 'cracked') && t.tier !== 'boss')
+  if (chain.sequence.length > 0 && chain.value >= 2) {
+    return { type: 'detonate', coord: chain.sequence[0]! }
+  }
+
+  // 3. Arm the next cascade (reveal at the mine ring / a deduced mine). Minimal tapping by design.
+  if (haveCovered && snap.playerCharge >= 1) {
+    const r = revealForAmmo(snap, boss)
+    if (r) return { type: 'reveal', coord: r }
+  }
+
+  // 4. Never stall: take a weaker chain, then a free deduced/fished mine.
+  if (chain.sequence.length > 0) return { type: 'detonate', coord: chain.sequence[0]! }
   const forced = findForcedMine(snap)
   if (forced) return { type: 'reveal', coord: forced.coord }
-  // No deducible mine either: fish. Sweep the most-enclosed covered tiles — a mine ringed by cleared
-  // ground tends to be among them — ROTATING the pick by move count so a dud ground tile (a no-op at 0
-  // charge) isn't re-tapped forever; the sweep keeps moving until a covered mine turns up and arms for
-  // free, refuelling the run. A human does exactly this when broke: feel around the edge for a mine to
-  // set off. Ugly but it always progresses, so the run resolves as a real win or loss, never a freeze.
-  if (tappable.length > 0) {
-    const ranked = [...tappable].sort((a, b) => clearedNeighbourCount(b, snap) - clearedNeighbourCount(a, snap))
-    const pick = ranked[snap.moves % Math.min(ranked.length, 16)]!
-    return { type: 'reveal', coord: pick.coord }
+  if (haveCovered) {
+    const tappable = actionable(snap).filter(t => t.tier !== 'boss')
+    if (tappable.length > 0) {
+      const ranked = [...tappable].sort((a, b) => clearedNeighbourCount(b, snap) - clearedNeighbourCount(a, snap))
+      return { type: 'reveal', coord: ranked[snap.moves % Math.min(ranked.length, 16)]!.coord }
+    }
   }
   return null
 }
