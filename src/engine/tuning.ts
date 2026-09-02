@@ -78,7 +78,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
   gentle: {
     width: 15,
     height: 15,
-    mineCount: 30, // ~14% of 169
+    mineCount: 34,
     hookCount: 30,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.18,
@@ -87,21 +87,21 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     goldSeconds: 88,
     silverSeconds: 100,
     bronzeSeconds: 116,
-    startingCharge: 40,
-    maxPlayerCharge: 40,
+    startingCharge: 40, // fixed tap budget (no refund); cascade does the clearing
+    maxPlayerCharge: 999, // charge only decreases now, so the cap never binds
     chargeRegenPerSecond: 0, // earned, not regenerated: detonate mines to fund tapping
     stackCap: 6,
     blastRadiusCap: 3,
     gatherRadius: 4,
     killerMargin: 6, // easy: spread chain wins on its own, hooks optional
     chargeGainPerOverlap: 1,
-    chargeConversion: 4,
+    chargeConversion: 0, // no refund: charge is a fixed tap budget; the blast-arm cascade clears
     scoreDifficultyMultiplier: 1,
   },
   standard: {
     width: 17,
     height: 17,
-    mineCount: 40, // ~14% of 289
+    mineCount: 42,
     hookCount: 45,
     tierWeights: SPRITE_MIX,
     hardGroundGradient: 0.2,
@@ -110,15 +110,15 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     goldSeconds: 115,
     silverSeconds: 138,
     bronzeSeconds: 164,
-    startingCharge: 55,
-    maxPlayerCharge: 48,
+    startingCharge: 48, // fixed tap budget (no refund); cascade does the clearing
+    maxPlayerCharge: 999, // charge only decreases now, so the cap never binds
     chargeRegenPerSecond: 0,
     stackCap: 7,
     blastRadiusCap: 3,
     gatherRadius: 4,
     killerMargin: 3, // standard: needs a few hooks on many boards, hook-free on some
     chargeGainPerOverlap: 1,
-    chargeConversion: 4,
+    chargeConversion: 0, // no refund: charge is a fixed tap budget; the blast-arm cascade clears
     scoreDifficultyMultiplier: 1.6,
   },
   hard: {
@@ -133,15 +133,15 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyConfig>> = {
     goldSeconds: 145,
     silverSeconds: 168,
     bronzeSeconds: 195,
-    startingCharge: 75,
-    maxPlayerCharge: 56,
+    startingCharge: 56, // fixed tap budget (no refund); cascade does the clearing
+    maxPlayerCharge: 999, // charge only decreases now, so the cap never binds
     chargeRegenPerSecond: 0,
     stackCap: 8,
     blastRadiusCap: 3,
     gatherRadius: 5,
     killerMargin: 1, // hard: minimal mines -> must hook a tight cluster; rare seeds win hook-free
     chargeGainPerOverlap: 1,
-    chargeConversion: 4,
+    chargeConversion: 0, // no refund: charge is a fixed tap budget; the blast-arm cascade clears
     scoreDifficultyMultiplier: 2.4,
   },
 }

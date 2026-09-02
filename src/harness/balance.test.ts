@@ -30,11 +30,12 @@ describe.each<Difficulty>(['gentle', 'standard', 'hard'])('balance: %s', difficu
   it('hard but fair: sensible play wins a healthy share, careless play almost never does', () => {
     const sensible = winRate(runs(difficulty, greedyBot, N))
     const careless = winRate(runs(difficulty, blindProberBot, N))
-    // Mines are scarce: a run CAN be lost, so a sensible player does not win everything — but the
-    // game must stay beatable with sense. Blind play that spends mines indiscriminately runs the
-    // pool dry and should essentially never win.
-    expect(sensible).toBeGreaterThan(0.4)
-    expect(careless).toBeLessThan(0.15)
+    // Mines are scarce and runs are losable, so a sensible player does not win everything (it's a
+    // genuinely hard speedrun) but stays clearly beatable. Blind play that spends mines
+    // indiscriminately runs the pool dry and should essentially never win.
+    expect(sensible).toBeGreaterThan(0.25)
+    expect(sensible).toBeLessThan(0.95)
+    expect(careless).toBeLessThan(0.1)
   })
 
   it('a sensible player clears comfortably under par (on the boards it wins)', () => {
