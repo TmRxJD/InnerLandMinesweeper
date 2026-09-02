@@ -509,12 +509,14 @@ export class GameApp {
     }
   }
 
-  newGame(difficulty: Difficulty, seed: string): void {
+  newGame(difficulty: Difficulty, seed: string, untimed = false): void {
     this.difficulty = difficulty
     this.seed = seed
     // Speedrun: the clock counts DOWN from your best time on this difficulty. Your first game has no
-    // best, so it runs free (untimed) and sets the baseline; every game after must beat it.
-    this.target = this.bestTime(difficulty)
+    // best, so it runs free (untimed) and sets the baseline; every game after must beat it. The
+    // Autoplay showcase always runs untimed (`untimed`) — it never counts toward scores, and a clock
+    // loss would defeat the point of demonstrating a full clear.
+    this.target = untimed ? undefined : this.bestTime(difficulty)
     this.engine = createEngine({
       difficulty,
       seed,
@@ -1026,7 +1028,7 @@ export class GameApp {
     // clear→build→gather→deliver campaign, never an unwinnable-by-design seed where even perfect play
     // loses (the game is deliberately tight — not every random board is beatable). A fresh real game
     // still gets a plain randomSeed().
-    if (this.engine.snapshot().status !== 'playing') this.newGame(this.difficulty, this.demoSeed())
+    if (this.engine.snapshot().status !== 'playing') this.newGame(this.difficulty, this.demoSeed(), true)
     this.demoStep()
   }
 
@@ -1083,7 +1085,7 @@ export class GameApp {
     this.demoTimers.push(
       globalThis.setTimeout(() => {
         if (!this.demo) return
-        this.newGame(this.difficulty, this.demoSeed()) // showcase: next board is a clearable one too
+        this.newGame(this.difficulty, this.demoSeed(), true) // showcase: next board is a clearable one too, run untimed
         this.demoStep()
       }, delay),
     )
@@ -1097,10 +1099,13 @@ export class GameApp {
     this.demoUsedThisGame = true
     const snap = this.engine.snapshot()
     if (snap.status !== 'playing') return this.demoRestart(2400) // won/lost — next board
-    // The demo plays the intelligent planned move — the SAME deterministic MCTS the Hints point at —
-    // so watching Autoplay is watching the coach's advice carried out, tile by tile, by a search that
-    // actually reasons about outcomes rather than a rule-following script.
-    const action = this.planAction(600)
+    // The demo plays the reference strategist (the same beam-verified player the balance harness
+    // validates): clear the field outward, groom a keystone mine, pump it with overlapping detonations,
+    // then hook the packed cluster into the Boss and unload the chain. It commits to that plan rather
+    // than re-searching every move, so the campaign reads as deliberate — and because it is the EXACT
+    // player demoSeed pre-clears the board with, the showcase reliably reaches the kill instead of
+    // stalling out on a board a per-move search would have thrown away.
+    const action = autoPlay(snap)
     if (!action) return this.demoRestart(1200) // no move — next board
 
     const sigBefore = this.progressSig(snap)
