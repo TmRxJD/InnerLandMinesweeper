@@ -183,8 +183,9 @@ class Engine implements MinesweeperEngine {
       }
       const rng = new Rng(`${this.seed}:shrapnel:${tile.x}:${tile.y}:${this.detonations}`)
       rng.shuffle(ring)
+      const origin: Coord = { x: tile.x, y: tile.y }
       for (const t of ring.slice(0, shrapnelKills)) {
-        this.destroyGroundTile(t, events) // vaporised: cleared with its number kept hidden
+        this.destroyGroundTile(t, events, origin) // shrapnel: tagged with the blast origin for the tracer FX
         chainCleared += 1
       }
     }
@@ -279,12 +280,14 @@ class Engine implements MinesweeperEngine {
     this.collectHook(tile, events)
   }
 
-  private destroyGroundTile(tile: Tile, events: GameEvent[]): void {
+  private destroyGroundTile(tile: Tile, events: GameEvent[], from?: Coord): void {
     tile.state = 'cleared'
     tile.numberKnown = false
     tile.hp = 0
     this.tilesCleared++
-    events.push({ kind: 'tileDestroyed', coord: { x: tile.x, y: tile.y } })
+    events.push(from
+      ? { kind: 'tileDestroyed', coord: { x: tile.x, y: tile.y }, from }
+      : { kind: 'tileDestroyed', coord: { x: tile.x, y: tile.y } })
     this.collectHook(tile, events)
   }
 

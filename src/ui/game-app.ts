@@ -544,9 +544,17 @@ export class GameApp {
           for (const c of e.radius) this.pulseTile(c, 'blast-hit')
           break
         case 'mineChargeChanged':
-          // A mine's charge went up: spark it and flash it in its new charge colour.
-          this.fx.chargeSpark(e.coord.x, e.coord.y)
+          // A mine's charge went up: spark it (scaled by the boost size, so a fat detonator's
+          // super-charge erupts bigger than an ordinary +1) and flash it in its new charge colour.
+          this.fx.chargeSpark(e.coord.x, e.coord.y, e.to - e.from)
           this.flashChargeUp(e.coord, e.to)
+          break
+        case 'tileDestroyed':
+          // Shrapnel kills carry their blast origin — fly an amber bolt out to the struck enemy.
+          if (e.from) {
+            this.fx.shrapnel(e.from.x, e.from.y, e.coord.x, e.coord.y)
+            this.pulseTile(e.coord, 'shrapnel-hit')
+          }
           break
         case 'gameWon':
           this.onEnd(e.result, true)

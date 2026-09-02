@@ -480,10 +480,18 @@
   0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.95); }
   100% { box-shadow: 0 0 0 10px rgba(255, 91, 110, 0); }
 }
+/* Shrapnel hit: an amber flash on an enemy struck from just outside the blast, to match the
+   amber bolt the canvas flies out to it — distinct from the cyan blast wash. */
+@keyframes ilm-shrapnel-hit {
+  0% { box-shadow: 0 0 0 0 rgba(255, 171, 61, 0.95); background-color: rgba(255, 171, 61, 0.4); }
+  100% { box-shadow: 0 0 0 7px rgba(255, 171, 61, 0); background-color: transparent; }
+}
 .ilm-tile.blast-hit { animation: ilm-blast-hit 500ms ease-out; }
 .ilm-tile.blast-origin { animation: ilm-blast-origin 500ms ease-out; z-index: 7; }
+.ilm-tile.shrapnel-hit { animation: ilm-shrapnel-hit 500ms ease-out; z-index: 6; }
 .reduce-motion .ilm-tile.blast-hit,
-.reduce-motion .ilm-tile.blast-origin { animation: none; }
+.reduce-motion .ilm-tile.blast-origin,
+.reduce-motion .ilm-tile.shrapnel-hit { animation: none; }
 
 /* Charge-up: a quick pop + coloured glow when a mine's charge increases. */
 @keyframes ilm-charge-up {

@@ -122,7 +122,9 @@ export type GameEvent =
   | { kind: 'tileCleared'; coord: Coord; number: number; chargeSpent: number }
   // A blast vaporises a tile: it counts as cleared, but its number is never revealed —
   // information stays tied to risky manual taps, and blasts stay free of info leakage.
-  | { kind: 'tileDestroyed'; coord: Coord }
+  // `from` is set only for a SHRAPNEL kill (an enemy just outside the blast, struck by the
+  // detonation at `from`) so the UI can draw a distinct tracer; radius-vaporised tiles omit it.
+  | { kind: 'tileDestroyed'; coord: Coord; from?: Coord }
   // A tile took partial damage (hand-chip under HP, or a blast that didn't finish it); the
   // HP bar reflects `crack` (0..1).
   | { kind: 'tileCracked'; coord: Coord; crack: number }
