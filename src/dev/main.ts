@@ -14,6 +14,25 @@ if (seed) opts.seed = seed
 
 const app = new GameApp(root, opts)
 
+const fullscreen = document.createElement('button')
+fullscreen.type = 'button'
+fullscreen.className = 'ilm-btn ilm-fullscreen'
+fullscreen.textContent = 'Fullscreen'
+fullscreen.addEventListener('click', async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen()
+    else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen()
+    else fullscreen.textContent = 'Full window'
+  } catch {
+    fullscreen.textContent = 'Full window'
+  }
+})
+root.querySelector('.ilm-header__actions')?.prepend(fullscreen)
+document.addEventListener('fullscreenchange', () => {
+  fullscreen.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'
+  window.dispatchEvent(new Event('resize'))
+})
+
 // Expose for poking in the console during development.
 ;(globalThis as unknown as { ilm: GameApp }).ilm = app
 

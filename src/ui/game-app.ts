@@ -553,8 +553,11 @@ export class GameApp {
     // the root's own width is capped below, so measuring it would ratchet down on resize.
     const cs = getComputedStyle(this.root)
     const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+    const standalone = document.body.classList.contains('ilm-standalone')
+    const stageWidth = this.board.parentElement?.clientWidth ?? 0
     const outer = this.root.parentElement?.clientWidth || document.documentElement.clientWidth || 620
-    const availW = outer - padX
+    const shortLandscape = standalone && window.innerWidth >= 680 && window.innerHeight <= 620
+    const availW = shortLandscape && stageWidth > 0 ? stageWidth : Math.min(outer, this.root.clientWidth || outer) - padX - 2
     if (availW <= 0) return // not laid out yet
     const rawW = (availW - (this.width - 1) * gap) / this.width
 
@@ -570,9 +573,9 @@ export class GameApp {
       raw = Math.min(rawW, rawH)
     }
 
-    // Floor of 18px keeps a dense board (15 cols) inside a ~375px phone; pinch-zoom covers
-    // precision. Ceiling of 44px stops tiles ballooning on wide screens.
-    const size = Math.max(18, Math.min(44, Math.floor(raw)))
+    // The standalone 21-column Hard board must fit even at 320px. Browser pinch-zoom
+    // remains available for precision; embedded hosts retain their existing size floor.
+    const size = Math.max(standalone ? 8 : 18, Math.min(standalone ? 64 : 44, Math.floor(raw)))
     this.root.style.setProperty('--tile-size', `${size}px`)
     // Hug the board: cap the card to the board's natural width so it doesn't leave dead
     // space on wide screens, while still shrinking to the viewport on narrow ones.

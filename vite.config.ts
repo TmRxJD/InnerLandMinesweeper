@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 
 // The dev host lives in src/dev; the engine + ui are consumed as source from there.
 export default defineConfig({
+  base: './',
   root: 'src/dev',
   server: { port: 5180 },
   build: {

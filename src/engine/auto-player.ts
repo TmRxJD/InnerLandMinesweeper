@@ -75,13 +75,20 @@ function canHookTowardBoss(mine: TileView, boss: Coord, snap: BoardSnapshot): bo
  *  in); the bot only picks which mine, and only one whose lane is open (canHookTowardBoss), so the
  *  hook always advances instead of no-opping. Mines already in strike range are left alone, so this
  *  drains to nothing rather than looping. */
-function gatherMove(squad: TileView[], boss: Coord, snap: BoardSnapshot): AutoAction | null {
+function gatherMove(squad: TileView[], boss: Coord, snap: BoardSnapshot, engine?: MinesweeperEngine): AutoAction | null {
   if (snap.hookCharges < 1) return null
   const outOfRange = squad
-    .filter(m => cheb(m.coord, boss) > blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1)
+    // Being in Boss range does not imply the mines overlap each other. Tighten the
+    // squad onto the inner ring so its detonations can actually charge the next hit.
+    .filter(m => cheb(m.coord, boss) > 1)
     .sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss))
   for (const m of outOfRange) {
-    if (canHookTowardBoss(m, boss, snap)) return { type: 'hook', coord: m.coord }
+    if (canHookTowardBoss(m, boss, snap)) {
+      // A covered destination may hide a mine. Check the actual legal transition on a
+      // clone so the live planner cannot repeat a blocked hook indefinitely.
+      if (engine && !engine.clone().useHook(m.coord, { x: 0, y: 0 }).some(e => e.kind === 'hookUsed')) continue
+      return { type: 'hook', coord: m.coord }
+    }
   }
   return null
 }
@@ -322,7 +329,7 @@ export function autoPlay(snap: BoardSnapshot, opts: AutoPlayOptions = {}): AutoA
   // move count so a dud ground tile (a no-op at 0 charge) isn't re-tapped forever.
   if (tappable.length > 0) {
     const ranked = [...tappable].sort((a, b) => clearedNeighbourCount(b, snap) - clearedNeighbourCount(a, snap))
-    return { type: 'reveal', coord: ranked[snap.moves % Math.min(ranked.length, 16)]!.coord }
+    return { type: 'reveal', coord: ranked[snap.moves % ranked.length]!.coord }
   }
   return null
 }
@@ -403,6 +410,8 @@ function revealForAmmo(snap: BoardSnapshot, boss: Coord): Coord | null {
  *
  * Takes the live engine (not a snapshot) because the chain search clones and plays forward.
  */
+const probeHistory = new WeakMap<MinesweeperEngine, { position: string; attempted: Set<number> }>()
+
 export function planMove(engine: MinesweeperEngine): AutoAction | null {
   const snap = engine.snapshot()
   if (snap.status !== 'playing') return null
@@ -410,12 +419,23 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
   const mines = armedMines(snap)
   const bossAlive = snap.bossHp > 0
   const need = Math.ceil(Math.sqrt(2 * snap.bossHp)) + snap.bossShield + 3
-  const squad = [...mines].sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, need)
+  const squad = [...mines].filter(m => cheb(m.coord, boss) <= snap.gatherRadius || (m.mineCharge ?? 1) > 1)
+    .sort((a, b) => cheb(a.coord, boss) - cheb(b.coord, boss)).slice(0, need)
   const surplus = snap.minesRemaining - need
-  const squadKeys = new Set(squad.map(m => m.coord.y * snap.width + m.coord.x))
+  const squadKeys = new Set(squad.map(m => m.coord.y * 1000 + m.coord.x))
   const canHitBoss = (m: TileView): boolean =>
     cheb(m.coord, boss) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1
   const lethal = squad.length > 0 && predictChainDamage(squad, boss, snap) >= snap.bossHp
+
+  // A blast pumps armed neighbours only. Uncover likely ordnance in its reach first,
+  // so the planner builds an overlap instead of spending every mine as a singleton.
+  if (snap.playerCharge >= 2 && !lethal) {
+    const candidates = actionable(snap).filter(t => t.tier !== 'boss' &&
+      mines.some(m => cheb(m.coord, t.coord) <= blastRadiusForStack(m.mineCharge ?? 1, snap.blastRadiusCap) + 1) &&
+      mineLikelihood(t, snap) >= 0.4)
+    const next = bestBy(candidates, t => mineLikelihood(t, snap))
+    if (next) return { type: 'reveal', coord: next.coord }
+  }
 
   // 1. Boss campaign — chainStarter detonates outer squad mines to pump an inner keystone, then delivers
   //    it, when the squad is lethally gathered; otherwise, once the field surplus is spent, hook the
@@ -426,11 +446,11 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
       const starter = chainStarter(squad, boss, snap)
       if (starter && canHitBoss(starter)) return { type: 'detonate', coord: starter.coord }
       if (snap.hookCharges >= 1) {
-        const g = gatherMove(squad, boss, snap)
+        const g = gatherMove(squad, boss, snap, engine)
         if (g) return g
       }
     } else if (surplus <= 1 && snap.hookCharges >= 1) {
-      const g = gatherMove(squad, boss, snap)
+      const g = gatherMove(squad, boss, snap, engine)
       if (g) return g
     }
   }
@@ -454,20 +474,32 @@ export function planMove(engine: MinesweeperEngine): AutoAction | null {
   //     finish the last tiles no blast can reach (without auto-arm those stragglers are common, and a
   //     dead-broke bot stalls on them). Spare the Boss squad while it lives; prefer the fattest mine.
   if (haveCovered && snap.playerCharge < 2) {
-    const fuel = bossAlive ? mines.filter(m => !squadKeys.has(m.coord.y * snap.width + m.coord.x)) : mines
+    const fuel = bossAlive ? mines.filter(m => !squadKeys.has(m.coord.y * 1000 + m.coord.x)) : mines
     const refuel = bestBy(fuel, m => m.mineCharge ?? 1)
     if (refuel) return { type: 'detonate', coord: refuel.coord }
   }
 
   // 4. Never stall: take a weaker chain, then a free deduced/fished mine.
   if (chain.sequence.length > 0) return { type: 'detonate', coord: chain.sequence[0]! }
+  let history = probeHistory.get(engine)
+  const position = `${snap.playerCharge}|${snap.hookCharges}|${snap.tiles.map(t => t.state).join(',')}`
+  if (!history || history.position !== position) {
+    history = { position, attempted: new Set() }
+    probeHistory.set(engine, history)
+  }
   const forced = findForcedMine(snap)
-  if (forced) return { type: 'reveal', coord: forced.coord }
+  if (forced && !history.attempted.has(forced.coord.y * 1000 + forced.coord.x)) {
+    history.attempted.add(forced.coord.y * 1000 + forced.coord.x)
+    return { type: 'reveal', coord: forced.coord }
+  }
   if (haveCovered) {
     const tappable = actionable(snap).filter(t => t.tier !== 'boss')
     if (tappable.length > 0) {
       const ranked = [...tappable].sort((a, b) => clearedNeighbourCount(b, snap) - clearedNeighbourCount(a, snap))
-      return { type: 'reveal', coord: ranked[snap.moves % Math.min(ranked.length, 16)]!.coord }
+      const next = ranked.find(t => !history!.attempted.has(t.coord.y * 1000 + t.coord.x))
+      if (!next) return null
+      history.attempted.add(next.coord.y * 1000 + next.coord.x)
+      return { type: 'reveal', coord: next.coord }
     }
   }
   return null

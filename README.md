@@ -94,3 +94,29 @@ pnpm harness        # headless speed sweep: completion, times, medals, hooks use
 pnpm analyze        # strategic analysis: stack building, hooks, blast eff, boss economy, VARIETY
 pnpm play           # ASCII CLI — t/d/h = tap/detonate/hook; --auto, --debug, --moves
 ```
+
+## Standalone game and GitHub Pages
+
+`pnpm dev` serves the complete fullscreen-capable game. It supports mouse, keyboard,
+long-press and drag on touch screens; the public host adapts from 320px phones through
+wide desktop screens and short landscape viewports. The reusable engine and embed
+entry remain independent of this host. `?seed=showcase-0&demo=1` starts real autoplay.
+
+`pnpm build:dev` generates `dist-dev`. The Pages workflow publishes that directory
+with relative asset URLs, after type checking and the current engine/gameplay-planner
+suite. Configure the repository's Pages source as GitHub Actions.
+
+### Validation scope
+
+The current engine and actual in-game `planMove` policy are covered by the Pages check.
+The planner regression plays 24 seeded boards across all three difficulties to a real
+win (all ground cleared and Boss dead), and checks blocked hooks/no-op probing.
+
+The independent legacy snapshot `autoPlay` balance harness and Monte Carlo planner
+are preserved. Their full-suite baseline reported 11 failures / 32 passes before this
+work: nine balance expectations (`expected 0 to be greater than 0.1`, `expected Infinity
+to be less than 50/66/90`, `expected Infinity to be less than Infinity`), the old
+snapshot reference win assertion (`expected 0 to be greater than 0`), and independent
+MCTS win assertion (`expected false to be true`). The engine reference win test now
+uses the actual UI planner. Legacy balance/MCTS tests are explicitly outside the Pages
+check; their thresholds have not been relaxed. Run `pnpm test` to include them.

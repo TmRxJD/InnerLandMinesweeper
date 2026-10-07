@@ -9,6 +9,7 @@ coverage/
 # session scratch (debug/sim throwaways)
 .scratch/
 dist-embed/
+dist-dev/
 
 # tooling / build output
 build/

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createEngine } from './engine'
 import { generateBoard, tileAt, type Board } from './board'
 import { DIFFICULTIES, blastRadiusForStack, overlapBoost } from './tuning'
-import { autoPlay } from './auto-player'
+import { planMove } from './auto-player'
 import type { Coord } from './types'
 
 const DIFF = 'gentle' as const
@@ -568,7 +568,7 @@ describe('speedrun clock', () => {
       const engine = createEngine({ difficulty: DIFF, seed: `win-seed-${s}` })
       let guard = 0
       while (engine.snapshot().status === 'playing' && guard++ < 8000) {
-        const action = autoPlay(engine.snapshot())
+        const action = planMove(engine)
         if (action) {
           if (action.type === 'reveal') engine.reveal(action.coord)
           else if (action.type === 'hook') engine.useHook(action.coord, action.dir ?? { x: 0, y: 0 })

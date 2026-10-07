@@ -722,3 +722,26 @@
 }
 
 .ilm-stats .ilm-stat--hook { justify-self: end; align-items: flex-end; text-align: right; }
+
+/* Standalone host remains independent of the reusable embedded game. */
+.ilm-standalone .ilm-root { max-width: 1100px !important; margin: auto; }
+.ilm-standalone .ilm-stat { min-width: 0; }
+.ilm-standalone .ilm-header__actions { display: flex; align-items: center; gap: 6px; }
+.ilm-standalone .ilm-iconbtn, .ilm-standalone .ilm-btn, .ilm-standalone .ilm-select { min-height: 40px; }
+.ilm-standalone .ilm-iconbtn { width: 36px; }
+.ilm-standalone .ilm-board { margin-inline: auto; touch-action: manipulation; }
+.ilm-standalone .ilm-title__text { font-size: clamp(12px, 2vw, 19px); }
+@media (max-width: 520px) {
+  .ilm-standalone .ilm-header { flex-wrap: wrap; gap: 6px; }
+  .ilm-standalone .ilm-header__actions { margin-left: auto; }
+  .ilm-standalone .ilm-stat__value { font-size: 19px; }
+}
+@media (min-width: 680px) and (max-height: 620px) {
+  .ilm-standalone .ilm-root { display: grid; grid-template-columns: minmax(210px, 1fr) minmax(0, 1.5fr); gap: 8px 16px; padding: 10px; }
+  .ilm-standalone .ilm-header { grid-column: 1; flex-wrap: wrap; }
+  .ilm-standalone .ilm-hud { grid-column: 1; gap: 6px; }
+  .ilm-standalone .ilm-coach { grid-column: 1; }
+  .ilm-standalone .ilm-stage { grid-column: 2; grid-row: 1 / 4; align-self: center; }
+}
+.ilm-standalone .ilm-stage { min-width: 0; width: 100%; }
+.ilm-standalone .ilm-board { width: max-content; max-width: 100%; }
