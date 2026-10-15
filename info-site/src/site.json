@@ -1,0 +1,54 @@
+{
+  "slug": "inner-land-minesweeper",
+  "playUrl": "https://tmrxjd.github.io/InnerLandMinesweeper/",
+  "title": "Inner Land Minesweeper",
+  "alias": "",
+  "accent": "#ffbf75",
+  "genre": "Chain-reaction puzzle",
+  "premise": "Mines are your weapons",
+  "summary": "Arm mines, chain their blasts, and hook a charged cluster into the shielded boss. Clear the field, then beat your own time.",
+  "about": [
+    "Arm mines, chain their blasts, and hook a charged cluster into the shielded boss. Clear the field, then beat your own time.",
+    "An independent mini game inspired by The Tower. Play the browser version, or explore the rest of Tower Arcade for another kind of challenge."
+  ],
+  "features": [
+    {
+      "title": "Mines as weapons",
+      "text": "Arm mines and use their blasts to clear the field."
+    },
+    {
+      "title": "Chain reactions",
+      "text": "Connect detonations into a charged cluster."
+    },
+    {
+      "title": "A shielded boss",
+      "text": "Hook your cluster into the boss to finish the encounter."
+    }
+  ],
+  "steps": [
+    {
+      "title": "Arm your mines",
+      "text": "Tap mines to prepare your attack."
+    },
+    {
+      "title": "Chain their blasts",
+      "text": "Detonate mines to build a useful chain reaction."
+    },
+    {
+      "title": "Break through",
+      "text": "Hook a charged cluster into the shielded boss, then try for a faster clear."
+    }
+  ],
+  "controls": [
+    {
+      "input": "Game input",
+      "action": "Tap to arm and detonate · mouse or touch"
+    },
+    {
+      "input": "On-screen menus",
+      "action": "Use the game’s menus to start a run and see its available options."
+    }
+  ],
+  "availability": "Available to play in your browser on desktop and mobile. The Play button opens the game.",
+  "controlNote": "The game’s own controls and menus provide any additional bindings."
+}

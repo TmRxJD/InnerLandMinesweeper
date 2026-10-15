@@ -32,6 +32,16 @@ jobs:
         run: pnpm test src/engine/engine.test.ts src/engine/planner.test.ts
       - run: pnpm build:dev
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
+      - name: Build matching Tower Arcade information page
+        working-directory: info-site
+        run: |
+          npm ci
+          npm run build
+      - name: Include information page alongside the playable game
+        run: |
+          mkdir -p dist-dev/about
+          cp -R info-site/dist/. dist-dev/about/
+
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
         with:
           path: dist-dev
